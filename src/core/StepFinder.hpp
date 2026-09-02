@@ -14,6 +14,8 @@
 #include "Chains.hpp"
 #include "AlmostLockedSets.hpp"
 #include "SueDeCoq.hpp"
+#include "ForcingChains.hpp"
+#include "Templates.hpp"
 #include "DlxSolver.hpp"
 
 namespace hodoku::core {
@@ -114,7 +116,21 @@ public:
         auto sdc = SueDeCoq::find_sue_de_coq(board);
         if (!sdc.empty()) return sdc.front();
 
-        // 12. Brute Force (Last Resort Fallback - HoDoKu BruteForceSolver.java, Score: 10000)
+        // 12. Forcing Chains (Cell, Region, Contradiction)
+        auto cfc = ForcingChains::find_cell_forcing_chains(board);
+        if (!cfc.empty()) return cfc.front();
+
+        auto rfc = ForcingChains::find_house_forcing_chains(board);
+        if (!rfc.empty()) return rfc.front();
+
+        auto cdc = ForcingChains::find_contradiction_chains(board);
+        if (!cdc.empty()) return cdc.front();
+
+        // 13. Templates (Template Delete, Template Set)
+        auto tmpl = Templates::find_template_steps(board);
+        if (!tmpl.empty()) return tmpl.front();
+
+        // 14. Brute Force (Last Resort Fallback - HoDoKu BruteForceSolver.java, Score: 10000)
         return find_brute_force(board);
     }
 
@@ -181,6 +197,10 @@ public:
         append(Chains::find_xy_chains(board));
         append(AlmostLockedSets::find_als_xz(board));
         append(SueDeCoq::find_sue_de_coq(board));
+        append(ForcingChains::find_cell_forcing_chains(board));
+        append(ForcingChains::find_house_forcing_chains(board));
+        append(ForcingChains::find_contradiction_chains(board));
+        append(Templates::find_template_steps(board));
 
         return all;
     }

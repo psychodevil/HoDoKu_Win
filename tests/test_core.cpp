@@ -271,6 +271,9 @@ void test_advanced_techniques() {
     assert(!als_list.empty());
     std::cout << "\n  -> Discovered " << als_list.size() << " Almost Locked Sets (ALS)";
 
+    auto tmpl_steps = Templates::find_template_steps(b_hard);
+    std::cout << "\n  -> Evaluated Forcing Chains and Templates (" << tmpl_steps.size() << " template steps evaluated)";
+
     std::cout << "\n[TEST] All technique modules successfully executed... PASSED\n";
 }
 
