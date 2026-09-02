@@ -640,6 +640,7 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hFile, MF_STRING, IDM_FILE_NEW, L"&New Random Sudoku\tCtrl+N");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_OPEN, L"&Open...\tCtrl+O");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE, L"&Save...\tCtrl+S");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_EXPORT_PNG, L"&Export Board Image (PNG)...");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SET_GIVENS, L"&Set Givens...\tCtrl+G");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
@@ -657,6 +658,9 @@ inline HMENU CreateHoDoKuMenuBar() {
     HMENU hEdit = CreatePopupMenu();
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_UNDO, L"&Undo\tCtrl+Z");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_REDO, L"&Redo\tCtrl+Y");
+    AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_ADD_SAVEPOINT, L"Add &Bookmark / Savepoint\tCtrl+M");
+    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_RESTORE_SAVEPOINT, L"Manage &Bookmarks...");
     AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_CLEAR_COLORS, L"Clear All &Colors\tR");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hEdit, L"&Edit");
@@ -680,6 +684,8 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_CONCRETE, L"&Concrete Hint\tCtrl+F12");
     AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_NEXT, L"&Show Next Step\tF12");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_EXECUTE_HINT, L"&Execute Step\tCtrl+E");
+    AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hPuzzle, MF_STRING, IDM_SOLVER_FIND_BACKDOORS, L"Find &Backdoors...\tCtrl+B");
     AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SET_SINGLES, L"Set All &Singles\tF11");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SOLVE_DLX, L"&Solve DLX\tCtrl+Shift+S");

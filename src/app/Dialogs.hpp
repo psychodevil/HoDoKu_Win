@@ -235,5 +235,97 @@ inline void ShowPracticingDialog(HWND hParent) {
         L"Practicing Mode - HoDoKu", MB_OK | MB_ICONINFORMATION);
 }
 
+inline void DoExportPng(HWND hwnd, const HoDoKuStudio& studio) {
+    wchar_t szFile[MAX_PATH] = L"sudoku_board.png";
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = L"PNG Image (*.png)\0*.png\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_OVERWRITEPROMPT;
+    if (GetSaveFileNameW(&ofn)) {
+        const int imgW = 600;
+        const int imgH = 600;
+        Gdiplus::Bitmap bmp(imgW, imgH, PixelFormat32bppARGB);
+        Gdiplus::Graphics g(&bmp);
+        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+
+        GridRenderer exportRenderer;
+        exportRenderer.render_grid_canvas(g, studio, 0, 0, imgW, imgH);
+
+        CLSID clsidPng = { 0x557cf406, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e } };
+        Gdiplus::Status st = bmp.Save(szFile, &clsidPng, NULL);
+        if (st == Gdiplus::Ok) {
+            MessageBoxW(hwnd, L"Sudoku board successfully exported to PNG image!", L"Export PNG - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        } else {
+            MessageBoxW(hwnd, L"Failed to export board to PNG image.", L"Export Error", MB_OK | MB_ICONERROR);
+        }
+    }
+}
+
+inline void ShowSavepointsDialog(HWND hwnd, HoDoKuStudio& studio) {
+    const auto& sps = studio.get_savepoints();
+    if (sps.empty()) {
+        int choice = MessageBoxW(hwnd,
+            L"No bookmarks / savepoints currently exist.\n\n"
+            L"Would you like to bookmark the current board state now?",
+            L"Bookmarks - HoDoKu", MB_YESNO | MB_ICONQUESTION);
+        if (choice == IDYES) {
+            studio.add_savepoint();
+            MessageBoxW(hwnd, L"Current board state bookmarked as 'Bookmark 1'.", L"Bookmark Created", MB_OK | MB_ICONINFORMATION);
+        }
+        return;
+    }
+
+    std::wstring msg = L"Available Bookmarks / Savepoints:\n\n";
+    for (size_t i = 0; i < sps.size(); ++i) {
+        msg += std::to_wstring(i + 1) + L". " + std::wstring(sps[i].name.begin(), sps[i].name.end()) +
+               L" (" + std::to_wstring(sps[i].board.unfilled_count()) + L" unfilled cells)\n";
+    }
+    msg += L"\nRestore the latest bookmark (" + std::wstring(sps.back().name.begin(), sps.back().name.end()) + L")?\n"
+           L"[Yes] Restore latest bookmark\n"
+           L"[No] Create a new bookmark from current board\n"
+           L"[Cancel] Close dialog";
+
+    int res = MessageBoxW(hwnd, msg.c_str(), L"Bookmarks & Savepoints - HoDoKu", MB_YESNOCANCEL | MB_ICONQUESTION);
+    if (res == IDYES) {
+        studio.restore_savepoint(sps.size() - 1);
+        if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
+        InvalidateRect(hwnd, NULL, FALSE);
+    } else if (res == IDNO) {
+        studio.add_savepoint();
+        MessageBoxW(hwnd, L"New bookmark created from current board state.", L"Bookmark Created", MB_OK | MB_ICONINFORMATION);
+    }
+}
+
+inline void ShowBackdoorsDialog(HWND hwnd, const HoDoKuStudio& studio) {
+    auto bds = studio.find_backdoors();
+    if (bds.empty()) {
+        MessageBoxW(hwnd,
+            L"No single-step level-1 backdoors found for the current state.\n"
+            L"The puzzle requires multi-step techniques or is already solved.",
+            L"Backdoor Search - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    std::wstring msg = L"Level-1 Backdoors Discovered (" + std::to_wstring(bds.size()) + L"):\n\n"
+                       L"Setting any of these cells immediately collapses the puzzle to Singles!\n\n";
+
+    size_t displayCount = std::min<size_t>(bds.size(), 16);
+    for (size_t i = 0; i < displayCount; ++i) {
+        int r = cell_row(bds[i].cell) + 1;
+        int c = cell_col(bds[i].cell) + 1;
+        msg += L" • r" + std::to_wstring(r) + L"c" + std::to_wstring(c) +
+               L" = " + std::to_wstring(bds[i].digit) + L"\n";
+    }
+    if (bds.size() > displayCount) {
+        msg += L" ... and " + std::to_wstring(bds.size() - displayCount) + L" more backdoors.\n";
+    }
+
+    MessageBoxW(hwnd, msg.c_str(), L"Backdoors Discovered (Ctrl+B) - HoDoKu", MB_OK | MB_ICONINFORMATION);
+}
+
 } // namespace hodoku::ui
 

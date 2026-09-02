@@ -178,6 +178,14 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowPreferencesDialog(g_hwnd);
             return true;
         }
+        if (wParam == 'B') {
+            ShowBackdoorsDialog(g_hwnd, *g_studio);
+            return true;
+        }
+        if (wParam == 'M') {
+            ShowSavepointsDialog(g_hwnd, *g_studio);
+            return true;
+        }
         if (wParam == 'C') {
             SetClipboardText(g_hwnd, g_studio->export_pm_grid());
             return true;
@@ -512,6 +520,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             DoFileOpen(hwnd, *g_studio);
         } else if (id == IDM_FILE_SAVE) {
             DoFileSave(hwnd, *g_studio);
+        } else if (id == IDM_FILE_EXPORT_PNG) {
+            DoExportPng(hwnd, *g_studio);
+        } else if (id == IDM_EDIT_ADD_SAVEPOINT) {
+            g_studio->add_savepoint();
+            MessageBoxW(hwnd, L"Current board state bookmarked successfully.", L"Bookmark Added - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        } else if (id == IDM_EDIT_RESTORE_SAVEPOINT) {
+            ShowSavepointsDialog(hwnd, *g_studio);
+        } else if (id == IDM_SOLVER_FIND_BACKDOORS) {
+            ShowBackdoorsDialog(hwnd, *g_studio);
         } else if (id == IDM_FILE_SET_GIVENS) {
             ShowSetGivensDialog(hwnd, *g_studio);
         } else if (id == IDM_OPTIONS_PREFERENCES || id == 9201) {

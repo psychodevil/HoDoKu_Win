@@ -431,6 +431,86 @@ public:
         m_activeCandidateColor = -1;
     }
 
+    struct Savepoint {
+        std::string name;
+        BoardState board;
+        std::array<uint8_t, TOTAL_CELLS> cellColors{};
+        std::array<std::array<uint8_t, 9>, TOTAL_CELLS> candidateColors{};
+    };
+
+    void add_savepoint(std::string name = "") {
+        if (name.empty()) {
+            name = "Bookmark " + std::to_string(m_savepoints.size() + 1);
+        }
+        m_savepoints.push_back({std::move(name), m_board, m_cellColors, m_candidateColors});
+    }
+
+    bool restore_savepoint(size_t index) {
+        if (index >= m_savepoints.size()) return false;
+        push_undo();
+        const auto& sp = m_savepoints[index];
+        m_board = sp.board;
+        m_cellColors = sp.cellColors;
+        m_candidateColors = sp.candidateColors;
+        m_selectedStep.reset();
+        m_hintLevel = HintLevel::None;
+        recalculate_solution_path();
+        recalculate_fas();
+        return true;
+    }
+
+    const std::vector<Savepoint>& get_savepoints() const { return m_savepoints; }
+    void clear_savepoints() { m_savepoints.clear(); }
+
+    struct BackdoorCandidate {
+        int cell;
+        int digit;
+    };
+
+    std::vector<BackdoorCandidate> find_backdoors() const {
+        std::vector<BackdoorCandidate> backdoors;
+        if (m_board.is_solved()) return backdoors;
+
+        DlxSolver solver;
+        auto sol = solver.solve_one(m_board);
+        if (!sol.has_value()) return backdoors;
+
+        for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+            if (!m_board.is_unfilled(cell)) continue;
+            int correct_digit = sol->get_value(cell);
+            if (!m_board.has_candidate(cell, correct_digit)) continue;
+
+            BoardState testBoard = m_board;
+            testBoard.set_value(cell, correct_digit);
+
+            bool progress = true;
+            while (progress && !testBoard.is_solved()) {
+                progress = false;
+                auto ns = SimpleTechniques::find_naked_singles(testBoard);
+                if (!ns.empty()) {
+                    for (const auto& a : ns.front().assignments) {
+                        testBoard.set_value(a.cell, a.digit);
+                    }
+                    progress = true;
+                    continue;
+                }
+                auto hs = SimpleTechniques::find_hidden_singles(testBoard);
+                if (!hs.empty()) {
+                    for (const auto& a : hs.front().assignments) {
+                        testBoard.set_value(a.cell, a.digit);
+                    }
+                    progress = true;
+                    continue;
+                }
+            }
+
+            if (testBoard.is_solved()) {
+                backdoors.push_back({cell, correct_digit});
+            }
+        }
+        return backdoors;
+    }
+
     // Getters & Setters
     int get_selected_cell() const { return m_selectedCell; }
     void set_selected_cell(int c) { m_selectedCell = c; }
@@ -477,6 +557,7 @@ private:
 
     int m_totalScore{0};
     DifficultyLevel m_hardestLevel{DifficultyLevel::Easy};
+    std::vector<Savepoint> m_savepoints;
 };
 
 } // namespace hodoku::ui
