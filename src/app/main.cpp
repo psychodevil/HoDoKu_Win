@@ -3,6 +3,7 @@
 #include "GridRenderer.hpp"
 #include "Dialogs.hpp"
 #include "UiLayout.hpp"
+#include "CommandLine.hpp"
 
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "comctl32.lib")
@@ -791,6 +792,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance;
     (void)lpCmdLine;
+
+    // 1. Process Headless Command-Line Interface (CLI)
+    if (CommandLine::process_command_line(__argc, __argv)) {
+        return 0;
+    }
 
     // GDI+ Startup
     GdiplusStartupInput gdiplusStartupInput;
