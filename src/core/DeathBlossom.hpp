@@ -136,3 +136,4 @@ public:
 };
 
 } // namespace hodoku::core
+

@@ -14,7 +14,6 @@
 #include "Chains.hpp"
 #include "AlmostLockedSets.hpp"
 #include "SueDeCoq.hpp"
-#include "DeathBlossom.hpp"
 #include "ForcingChains.hpp"
 #include "Templates.hpp"
 #include "DlxSolver.hpp"
@@ -120,9 +119,6 @@ public:
         auto sdc = SueDeCoq::find_sue_de_coq(board);
         if (!sdc.empty()) return sdc.front();
 
-        auto db = DeathBlossom::find_death_blossom(board);
-        if (!db.empty()) return db.front();
-
         // 12. Forcing Chains (Cell, Region, Contradiction)
         auto cfc = ForcingChains::find_cell_forcing_chains(board);
         if (!cfc.empty()) return cfc.front();
@@ -205,7 +201,6 @@ public:
         append(Chains::find_xy_chains(board));
         append(AlmostLockedSets::find_als_xz(board));
         append(SueDeCoq::find_sue_de_coq(board));
-        append(DeathBlossom::find_death_blossom(board));
         append(ForcingChains::find_cell_forcing_chains(board));
         append(ForcingChains::find_house_forcing_chains(board));
         append(ForcingChains::find_contradiction_chains(board));
