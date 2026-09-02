@@ -174,6 +174,7 @@ public:
                         }
 
                         bool isElim = false;
+                        bool isAssign = false;
                         if (hintLvl == HintLevel::Concrete && selStep) {
                             for (const auto& elim : selStep->eliminations) {
                                 if (elim.cell == cell && elim.digit == d) {
@@ -181,22 +182,71 @@ public:
                                     break;
                                 }
                             }
+                            for (const auto& asgn : selStep->assignments) {
+                                if (asgn.cell == cell && asgn.digit == d) {
+                                    isAssign = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (isAssign) {
+                            SolidBrush assignGlow(Color(180, 187, 247, 208));
+                            g.FillEllipse(&assignGlow, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            Pen assignBdr(Color(255, 34, 197, 94), 1.2f);
+                            g.DrawEllipse(&assignBdr, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
                         }
 
                         bool isFilterMatch = (activeFilter == d);
                         Brush* cBrush = isElim ? static_cast<Brush*>(&candElimBrush)
                                       : isFilterMatch ? static_cast<Brush*>(&candHighlightBrush)
+                                      : isAssign ? static_cast<Brush*>(&candHighlightBrush)
                                       : static_cast<Brush*>(&candNormalBrush);
 
-                        Font* f = isFilterMatch ? &candBoldFont : &candFont;
+                        Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
                         std::wstring candStr = std::to_wstring(d);
                         g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
 
                         if (isElim) {
-                            g.DrawLine(&elimStrikePen, kx + 2, ky + 2, kx + subCell - 2, ky + subCell - 2);
+                            g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
+                            g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
                         }
                     }
                 }
+            }
+        }
+
+        // Render Graphical Step Link Overlays (Strong & Weak Chain Links)
+        if (hintLvl == HintLevel::Concrete && selStep && !selStep->links.empty()) {
+            AdjustableArrowCap arrowCap(3.5f, 3.5f, true);
+
+            Pen strongPen(Color(230, 34, 197, 94), 2.2f);
+            strongPen.SetCustomEndCap(&arrowCap);
+
+            Pen weakPen(Color(230, 239, 68, 68), 1.8f);
+            weakPen.SetDashStyle(DashStyleDash);
+            weakPen.SetCustomEndCap(&arrowCap);
+
+            for (const auto& link : selStep->links) {
+                float x1, y1, x2, y2;
+                if (link.from_digit >= 1 && link.from_digit <= 9) {
+                    x1 = m_offsetX + cell_col(link.from_cell) * m_cellSize + ((link.from_digit - 1) % 3 + 0.5f) * subCell;
+                    y1 = m_offsetY + cell_row(link.from_cell) * m_cellSize + ((link.from_digit - 1) / 3 + 0.5f) * subCell;
+                } else {
+                    x1 = m_offsetX + (cell_col(link.from_cell) + 0.5f) * m_cellSize;
+                    y1 = m_offsetY + (cell_row(link.from_cell) + 0.5f) * m_cellSize;
+                }
+
+                if (link.to_digit >= 1 && link.to_digit <= 9) {
+                    x2 = m_offsetX + cell_col(link.to_cell) * m_cellSize + ((link.to_digit - 1) % 3 + 0.5f) * subCell;
+                    y2 = m_offsetY + cell_row(link.to_cell) * m_cellSize + ((link.to_digit - 1) / 3 + 0.5f) * subCell;
+                } else {
+                    x2 = m_offsetX + (cell_col(link.to_cell) + 0.5f) * m_cellSize;
+                    y2 = m_offsetY + (cell_row(link.to_cell) + 0.5f) * m_cellSize;
+                }
+
+                Pen* p = link.is_strong ? &strongPen : &weakPen;
+                g.DrawLine(p, x1, y1, x2, y2);
             }
         }
     }
