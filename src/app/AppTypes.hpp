@@ -72,6 +72,20 @@ static const int SWATCH_COLOR_MAP[10] = {
     1, 3, 5, 7, 9  // Row 1
 };
 
+// 9 ColorKu distinct marble colors
+static const Color COLORKU_PALETTE[10] = {
+    Color(255, 200, 200, 200), // 0: None
+    Color(255, 220, 38, 38),   // 1: Red
+    Color(255, 249, 115, 22),  // 2: Orange
+    Color(255, 234, 179, 8),   // 3: Yellow
+    Color(255, 22, 163, 74),   // 4: Dark Green
+    Color(255, 14, 165, 233),  // 5: Sky Blue
+    Color(255, 37, 99, 235),   // 6: Royal Blue
+    Color(255, 147, 51, 234),  // 7: Violet / Purple
+    Color(255, 219, 39, 119),  // 8: Pink / Magenta
+    Color(255, 248, 250, 252)  // 9: Pearl White
+};
+
 // Menu & Control IDs
 enum MenuAndControlId {
     IDM_FILE_NEW = 2001,
@@ -93,6 +107,7 @@ enum MenuAndControlId {
     IDM_SOLVER_FIND_BACKDOORS,
 
     IDM_VIEW_SUDOKU_ONLY,
+    IDM_VIEW_COLORKU = 9301,
     IDM_VIEW_ACTIVE_CELL,
     IDM_VIEW_SUMMARY,
     IDM_VIEW_SOL_PATH,

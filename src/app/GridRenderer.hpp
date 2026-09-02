@@ -54,6 +54,37 @@ public:
         return 0;
     }
 
+    static void draw_colorku_marble(Graphics& g, float cx, float cy, float radius, int digit) {
+        if (digit < 1 || digit > 9) return;
+        Color baseCol = COLORKU_PALETTE[digit];
+
+        // 1. Soft drop shadow behind marble
+        SolidBrush shadowBrush(Color(70, 0, 0, 0));
+        g.FillEllipse(&shadowBrush, cx - radius + 1.5f, cy - radius + 2.5f, radius * 2.0f, radius * 2.0f);
+
+        // 2. Base 3D sphere body
+        SolidBrush bodyBrush(baseCol);
+        g.FillEllipse(&bodyBrush, cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+
+        // 3. Shaded rim arc for 3D depth
+        Color darkCol(80, 0, 0, 0);
+        Pen rimPen(darkCol, std::max(1.0f, radius * 0.15f));
+        g.DrawArc(&rimPen, cx - radius + 1.0f, cy - radius + 1.0f, radius * 2.0f - 2.0f, radius * 2.0f - 2.0f, 15.0f, 120.0f);
+
+        // 4. Upper-left specular highlight (polished glass / lacquer reflection)
+        float hlRadius = radius * 0.42f;
+        float hx = cx - radius * 0.35f;
+        float hy = cy - radius * 0.35f;
+        SolidBrush hlBrush(Color(180, 255, 255, 255));
+        g.FillEllipse(&hlBrush, hx - hlRadius * 0.5f, hy - hlRadius * 0.5f, hlRadius, hlRadius);
+
+        // 5. Pinpoint white sparkle glint
+        if (radius >= 10.0f) {
+            SolidBrush glintBrush(Color(240, 255, 255, 255));
+            g.FillEllipse(&glintBrush, hx - 1.0f, hy - 1.0f, 2.5f, 2.5f);
+        }
+    }
+
     void render_grid_canvas(Graphics& g, const HoDoKuStudio& studio, int x, int y, int width, int height) {
         update_layout(x, y, width, height);
 
@@ -152,10 +183,15 @@ public:
 
             uint8_t val = board.get_value(cell);
             if (val != 0) {
-                RectF cellRect(cx, cy, m_cellSize, m_cellSize);
-                std::wstring text = std::to_wstring(val);
-                Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush) : static_cast<Brush*>(&userBrush);
-                g.DrawString(text.c_str(), -1, &digitFont, cellRect, &centerFmt, b);
+                if (studio.is_colorku_mode()) {
+                    float marbleRadius = m_cellSize * 0.38f;
+                    draw_colorku_marble(g, cx + m_cellSize * 0.5f, cy + m_cellSize * 0.5f, marbleRadius, val);
+                } else {
+                    RectF cellRect(cx, cy, m_cellSize, m_cellSize);
+                    std::wstring text = std::to_wstring(val);
+                    Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush) : static_cast<Brush*>(&userBrush);
+                    g.DrawString(text.c_str(), -1, &digitFont, cellRect, &centerFmt, b);
+                }
             } else {
                 CandidateMask mask = board.get_candidates(cell);
                 for (int d = 1; d <= 9; ++d) {
@@ -165,13 +201,6 @@ public:
                         float kx = cx + dc * subCell;
                         float ky = cy + dr * subCell;
                         RectF candRect(kx, ky, subCell, subCell);
-
-                        // Candidate-level custom coloring background
-                        int candCol = studio.get_candidate_color(cell, d);
-                        if (candCol > 0 && candCol < 10) {
-                            SolidBrush candBg(HODOKU_PALETTE[candCol]);
-                            g.FillRectangle(&candBg, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                        }
 
                         bool isElim = false;
                         bool isAssign = false;
@@ -190,26 +219,42 @@ public:
                             }
                         }
 
-                        if (isAssign) {
-                            SolidBrush assignGlow(Color(180, 187, 247, 208));
-                            g.FillEllipse(&assignGlow, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                            Pen assignBdr(Color(255, 34, 197, 94), 1.2f);
-                            g.DrawEllipse(&assignBdr, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                        }
+                        if (studio.is_colorku_mode()) {
+                            float beadRadius = subCell * 0.32f;
+                            draw_colorku_marble(g, kx + subCell * 0.5f, ky + subCell * 0.5f, beadRadius, d);
+                            if (isElim) {
+                                g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
+                                g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
+                            }
+                        } else {
+                            // Candidate-level custom coloring background
+                            int candCol = studio.get_candidate_color(cell, d);
+                            if (candCol > 0 && candCol < 10) {
+                                SolidBrush candBg(HODOKU_PALETTE[candCol]);
+                                g.FillRectangle(&candBg, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            }
 
-                        bool isFilterMatch = (activeFilter == d);
-                        Brush* cBrush = isElim ? static_cast<Brush*>(&candElimBrush)
-                                      : isFilterMatch ? static_cast<Brush*>(&candHighlightBrush)
-                                      : isAssign ? static_cast<Brush*>(&candHighlightBrush)
-                                      : static_cast<Brush*>(&candNormalBrush);
+                            if (isAssign) {
+                                SolidBrush assignGlow(Color(180, 187, 247, 208));
+                                g.FillEllipse(&assignGlow, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                                Pen assignBdr(Color(255, 34, 197, 94), 1.2f);
+                                g.DrawEllipse(&assignBdr, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            }
 
-                        Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
-                        std::wstring candStr = std::to_wstring(d);
-                        g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
+                            bool isFilterMatch = (activeFilter == d);
+                            Brush* cBrush = isElim ? static_cast<Brush*>(&candElimBrush)
+                                          : isFilterMatch ? static_cast<Brush*>(&candHighlightBrush)
+                                          : isAssign ? static_cast<Brush*>(&candHighlightBrush)
+                                          : static_cast<Brush*>(&candNormalBrush);
 
-                        if (isElim) {
-                            g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
-                            g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
+                            Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
+                            std::wstring candStr = std::to_wstring(d);
+                            g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
+
+                            if (isElim) {
+                                g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
+                                g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
+                            }
                         }
                     }
                 }

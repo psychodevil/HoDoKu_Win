@@ -694,6 +694,7 @@ inline HMENU CreateHoDoKuMenuBar() {
     // View Menu
     HMENU hView = CreatePopupMenu();
     AppendMenuW(hView, MF_STRING, IDM_VIEW_SUDOKU_ONLY, L"&Sudoku Only\tCtrl+Shift+0");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_COLORKU, L"&ColorKu 3D Marble Mode\tCtrl+Shift+C");
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hView, MF_STRING, IDM_VIEW_SUMMARY, L"&Summary\tF6");
     AppendMenuW(hView, MF_STRING, IDM_VIEW_SOL_PATH, L"Solution &Path\tF7");

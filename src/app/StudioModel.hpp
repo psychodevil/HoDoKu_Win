@@ -524,6 +524,9 @@ public:
     HintLevel get_hint_level() const { return m_hintLevel; }
     GameMode get_game_mode() const { return m_gameMode; }
     void set_game_mode(GameMode mode) { m_gameMode = mode; }
+    bool is_colorku_mode() const { return m_colorKuMode; }
+    void toggle_colorku_mode() { m_colorKuMode = !m_colorKuMode; }
+    void set_colorku_mode(bool val) { m_colorKuMode = val; }
 
     int get_cell_color(int cell) const {
         return (cell >= 0 && cell < TOTAL_CELLS) ? m_cellColors[cell] : 0;
@@ -558,6 +561,7 @@ private:
     int m_totalScore{0};
     DifficultyLevel m_hardestLevel{DifficultyLevel::Easy};
     std::vector<Savepoint> m_savepoints;
+    bool m_colorKuMode{false};
 };
 
 } // namespace hodoku::ui

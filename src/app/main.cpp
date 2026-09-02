@@ -107,6 +107,11 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             SwitchTab(TabView::AllSteps, *g_studio);
             return true;
         }
+        if (wParam == 'C') {
+            g_studio->toggle_colorku_mode();
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
 
     // 2. Control Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+N, Ctrl+C, Ctrl+V, Ctrl+G, Ctrl+R, Ctrl+E, Ctrl+H, Ctrl+O, Ctrl+S, Ctrl+P)
@@ -570,6 +575,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_VIEW_SUDOKU_ONLY) {
             ToggleSudokuOnly(*g_studio);
+        } else if (id == IDM_VIEW_COLORKU) {
+            g_studio->toggle_colorku_mode();
+            InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_VIEW_ACTIVE_CELL) {
             SwitchTab(TabView::ActiveCell, *g_studio);
         } else if (id == IDM_VIEW_SUMMARY) {
