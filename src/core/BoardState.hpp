@@ -137,6 +137,26 @@ public:
         return true;
     }
 
+    void set_candidates(int cell, CandidateMask mask) noexcept {
+        if (cell < 0 || cell >= TOTAL_CELLS) return;
+        m_unfilled_cells.set(cell);
+        m_values[cell] = 0;
+        for (int d = 1; d <= 9; ++d) {
+            bool had = (m_candidates[cell] & digit_to_mask(d)) != 0;
+            bool will_have = (mask & digit_to_mask(d)) != 0;
+            if (had && !will_have) {
+                for (int h : GRID.cell_houses[cell]) {
+                    if (m_house_candidate_counts[h][d] > 0) --m_house_candidate_counts[h][d];
+                }
+            } else if (!had && will_have) {
+                for (int h : GRID.cell_houses[cell]) {
+                    ++m_house_candidate_counts[h][d];
+                }
+            }
+        }
+        m_candidates[cell] = mask;
+    }
+
     bool set_value(int cell, int digit) noexcept {
         if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return false;
 

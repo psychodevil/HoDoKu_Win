@@ -28,9 +28,12 @@ enum class TechniqueType {
     XYZWing,
     WXYZWing,
     UniqueRectangle,
+    AvoidableRectangle,
+    BUG,
     RemotePair,
     AlsXz,
     SueDeCoq,
+    DeathBlossom,
     BruteForce,
     Custom
 };

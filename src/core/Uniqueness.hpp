@@ -1,133 +1,143 @@
 #pragma once
 
-#include <vector>
-#include <string>
+#include "Types.hpp"
+#include "BitSet81.hpp"
+#include "GridConstants.hpp"
 #include "BoardState.hpp"
 #include "Step.hpp"
+#include <vector>
+#include <string>
+#include <algorithm>
 
 namespace hodoku::core {
 
 class Uniqueness {
 public:
-    // 1. Unique Rectangles Types 1, 2, and 4 (Hard, Score: 100)
+    static std::vector<Step> find_all_steps(const BoardState& board) {
+        std::vector<Step> steps;
+        auto ur = find_unique_rectangles(board);
+        steps.insert(steps.end(), ur.begin(), ur.end());
+        auto bug = find_bug_plus_one(board);
+        steps.insert(steps.end(), bug.begin(), bug.end());
+        auto ar = find_avoidable_rectangles(board);
+        steps.insert(steps.end(), ar.begin(), ar.end());
+        return steps;
+    }
+
+    // 1. BUG + 1 (Bivalue Universal Grave Type 1)
+    static std::vector<Step> find_bug_plus_one(const BoardState& board) {
+        std::vector<Step> steps;
+        int trivalueCell = -1;
+        int trivalueCount = 0;
+
+        for (int c = 0; c < TOTAL_CELLS; ++c) {
+            if (!board.is_unfilled(c)) continue;
+            int nCands = board.count_candidates(c);
+            if (nCands < 2) return steps; // Invalid / already broken
+            if (nCands > 3) return steps; // Not a BUG+1 if any cell has > 3 candidates
+            if (nCands == 3) {
+                trivalueCount++;
+                if (trivalueCount > 1) return steps; // Only 1 trivalue cell allowed
+                trivalueCell = c;
+            }
+        }
+
+        if (trivalueCount != 1 || trivalueCell == -1) return steps;
+
+        int targetDigit = -1;
+        int r = cell_row(trivalueCell);
+        int c = cell_col(trivalueCell);
+        int b = cell_box(trivalueCell);
+
+        CandidateMask mask = board.get_candidates(trivalueCell);
+
+        for (int d = 1; d <= 9; ++d) {
+            if (!mask_has_digit(mask, d)) continue;
+
+            int countR = 0, countC = 0, countB = 0;
+            for (int cell : GRID.row_cells[r]) {
+                if (board.is_unfilled(cell) && board.has_candidate(cell, d)) countR++;
+            }
+            for (int cell : GRID.col_cells[c]) {
+                if (board.is_unfilled(cell) && board.has_candidate(cell, d)) countC++;
+            }
+            for (int cell : GRID.box_cells[b]) {
+                if (board.is_unfilled(cell) && board.has_candidate(cell, d)) countB++;
+            }
+
+            if (countR == 3 && countC == 3 && countB == 3) {
+                targetDigit = d;
+                break;
+            }
+        }
+
+        if (targetDigit != -1) {
+            Step s;
+            s.type = TechniqueType::BUG;
+            s.name = "Bivalue Universal Grave +1";
+            s.difficulty = DifficultyLevel::Hard;
+            s.score = 100;
+            s.explanation = "All unfilled cells are bivalue except " + format_cell(trivalueCell) +
+                            ". Digit " + std::to_string(targetDigit) + " appears 3 times in its row, column, and box; placing it prevents deadly multi-solution pattern.";
+
+            s.assignments.push_back({trivalueCell, targetDigit});
+            for (int d = 1; d <= 9; ++d) {
+                if (d != targetDigit && mask_has_digit(mask, d)) {
+                    s.eliminations.push_back({trivalueCell, d});
+                }
+            }
+            s.primary_cells.set(trivalueCell);
+            steps.push_back(s);
+        }
+
+        return steps;
+    }
+
+    // 2. Unique Rectangles (Types 1-6)
     static std::vector<Step> find_unique_rectangles(const BoardState& board) {
         std::vector<Step> steps;
 
-        // Iterate over all pairs of rows
         for (int r1 = 0; r1 < 8; ++r1) {
             for (int r2 = r1 + 1; r2 < 9; ++r2) {
                 for (int c1 = 0; c1 < 8; ++c1) {
                     for (int c2 = c1 + 1; c2 < 9; ++c2) {
-                        int cell11 = cell_index(r1, c1);
-                        int cell12 = cell_index(r1, c2);
-                        int cell21 = cell_index(r2, c1);
-                        int cell22 = cell_index(r2, c2);
+                        int p11 = cell_index(r1, c1);
+                        int p12 = cell_index(r1, c2);
+                        int p21 = cell_index(r2, c1);
+                        int p22 = cell_index(r2, c2);
 
-                        // All 4 cells must be unfilled
-                        if (!board.is_unfilled(cell11) || !board.is_unfilled(cell12) ||
-                            !board.is_unfilled(cell21) || !board.is_unfilled(cell22)) {
+                        if (!board.is_unfilled(p11) || !board.is_unfilled(p12) ||
+                            !board.is_unfilled(p21) || !board.is_unfilled(p22)) {
                             continue;
                         }
 
-                        // Must touch exactly 2 boxes (either horizontal pair or vertical pair)
-                        int b1 = cell_box(cell11);
-                        int b2 = cell_box(cell12);
-                        int b3 = cell_box(cell21);
-                        int b4 = cell_box(cell22);
-                        bool horiz = (b1 == b2 && b3 == b4 && b1 != b3);
-                        bool vert = (b1 == b3 && b2 == b4 && b1 != b2);
-                        if (!horiz && !vert) continue;
+                        int b11 = cell_box(p11);
+                        int b12 = cell_box(p12);
+                        int b21 = cell_box(p21);
+                        int b22 = cell_box(p22);
 
-                            CandidateMask m11 = board.get_candidates(cell11);
-                            CandidateMask m12 = board.get_candidates(cell12);
-                            CandidateMask m21 = board.get_candidates(cell21);
-                            CandidateMask m22 = board.get_candidates(cell22);
+                        bool validBoxes = ((b11 == b12 && b21 == b22 && b11 != b21) ||
+                                           (b11 == b21 && b12 == b22 && b11 != b12));
+                        if (!validBoxes) continue;
 
-                            // Test all pairs of digits (d1, d2)
-                            CandidateMask common = m11 & m12 & m21 & m22;
-                            for (int d1 = 1; d1 <= 8; ++d1) {
-                                if (!mask_has_digit(common, d1)) continue;
-                                for (int d2 = d1 + 1; d2 <= 9; ++d2) {
-                                    if (!mask_has_digit(common, d2)) continue;
+                        int cells[4] = {p11, p12, p21, p22};
+                        CandidateMask masks[4] = {
+                            board.get_candidates(p11),
+                            board.get_candidates(p12),
+                            board.get_candidates(p21),
+                            board.get_candidates(p22)
+                        };
 
-                                    CandidateMask pair_mask = digit_to_mask(d1) | digit_to_mask(d2);
+                        for (int d1 = 1; d1 < 9; ++d1) {
+                            for (int d2 = d1 + 1; d2 <= 9; ++d2) {
+                                if (!mask_has_digit(masks[0], d1) || !mask_has_digit(masks[0], d2) ||
+                                    !mask_has_digit(masks[1], d1) || !mask_has_digit(masks[1], d2) ||
+                                    !mask_has_digit(masks[2], d1) || !mask_has_digit(masks[2], d2) ||
+                                    !mask_has_digit(masks[3], d1) || !mask_has_digit(masks[3], d2)) {
+                                    continue;
+                                }
 
-                                    int pure_count = 0;
-                                    int extra_idx = -1;
-                                    int cells[4] = {cell11, cell12, cell21, cell22};
-                                    CandidateMask masks[4] = {m11, m12, m21, m22};
-
-                                    for (int k = 0; k < 4; ++k) {
-                                        if (masks[k] == pair_mask) {
-                                            pure_count++;
-                                        } else {
-                                            extra_idx = k;
-                                        }
-                                    }
-
-                                    // Type 1: Exactly 3 cells are pure bivalue (d1, d2)
-                                    if (pure_count == 3 && extra_idx != -1) {
-                                        int target = cells[extra_idx];
-                                        std::vector<CandidateElimination> elims;
-                                        elims.push_back({target, d1});
-                                        elims.push_back({target, d2});
-
-                                        Step step;
-                                        step.type = TechniqueType::UniqueRectangle;
-                                        step.name = "Unique Rectangle Type 1";
-                                        step.difficulty = DifficultyLevel::Hard;
-                                        step.score = 100;
-                                        for (int k = 0; k < 4; ++k) step.primary_cells.set(cells[k]);
-                                        step.eliminations = elims;
-
-                                        step.explanation = "Unique Rectangle Type 1 (" + std::to_string(d1) + "/" + std::to_string(d2) +
-                                                          ") eliminates (" + std::to_string(d1) + "," + std::to_string(d2) +
-                                                          ") from r" + std::to_string(cell_row(target) + 1) + "c" + std::to_string(cell_col(target) + 1) +
-                                                          " to prevent a deadly pattern.";
-                                        steps.push_back(step);
-                                    }
-
-                                    // Type 2: Exactly 2 cells are pure, other 2 have the same extra candidate x
-                                    if (pure_count == 2) {
-                                        std::vector<int> extras;
-                                        for (int k = 0; k < 4; ++k) {
-                                            if (masks[k] != pair_mask) extras.push_back(k);
-                                        }
-                                        if (extras.size() == 2) {
-                                            CandidateMask extra_mask1 = masks[extras[0]] & ~pair_mask;
-                                            CandidateMask extra_mask2 = masks[extras[1]] & ~pair_mask;
-
-                                            if (count_candidates(extra_mask1) == 1 && extra_mask1 == extra_mask2) {
-                                                int x = get_single_digit(extra_mask1);
-                                                int cA = cells[extras[0]];
-                                                int cB = cells[extras[1]];
-
-                                                BitSet81 common_peers = get_peer_bitset(cA) & get_peer_bitset(cB);
-                                                std::vector<CandidateElimination> elims;
-
-                                                common_peers.for_each_cell([&](int target) {
-                                                    if (board.is_unfilled(target) && board.has_candidate(target, x)) {
-                                                        elims.push_back({target, x});
-                                                    }
-                                                });
-
-                                                if (!elims.empty()) {
-                                                    Step step;
-                                                    step.type = TechniqueType::UniqueRectangle;
-                                                    step.name = "Unique Rectangle Type 2";
-                                                    step.difficulty = DifficultyLevel::Hard;
-                                                    step.score = 100;
-                                                    for (int k = 0; k < 4; ++k) step.primary_cells.set(cells[k]);
-                                                    step.eliminations = elims;
-
-                                                    step.explanation = "Unique Rectangle Type 2 (" + std::to_string(d1) + "/" + std::to_string(d2) +
-                                                                      ") with extra candidate " + std::to_string(x) +
-                                                                      " eliminates " + std::to_string(x) + " from common peers.";
-                                                    steps.push_back(step);
-                                                }
-                                            }
-                                        }
-                                    }
+                                check_ur_patterns(board, cells, masks, d1, d2, steps);
                             }
                         }
                     }
@@ -138,68 +148,259 @@ public:
         return steps;
     }
 
-    // 2. BUG+1 (Binary Universal Grave + 1 - Hard, Score: 100)
-    static std::vector<Step> find_bug_plus_one(const BoardState& board) {
+    // 3. Avoidable Rectangles (AR Type 1 & 2)
+    static std::vector<Step> find_avoidable_rectangles(const BoardState& board) {
         std::vector<Step> steps;
 
-        int tri_cell = -1;
-        int unfilled_count = 0;
+        for (int r1 = 0; r1 < 8; ++r1) {
+            for (int r2 = r1 + 1; r2 < 9; ++r2) {
+                for (int c1 = 0; c1 < 8; ++c1) {
+                    for (int c2 = c1 + 1; c2 < 9; ++c2) {
+                        int p11 = cell_index(r1, c1);
+                        int p12 = cell_index(r1, c2);
+                        int p21 = cell_index(r2, c1);
+                        int p22 = cell_index(r2, c2);
 
-        for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
-            if (board.is_unfilled(cell)) {
-                unfilled_count++;
-                int cnt = board.count_candidates(cell);
-                if (cnt == 2) {
-                    continue;
-                } else if (cnt == 3) {
-                    if (tri_cell == -1) {
-                        tri_cell = cell;
-                    } else {
-                        return steps; // More than 1 tri-value cell -> not BUG+1
+                        int b11 = cell_box(p11);
+                        int b12 = cell_box(p12);
+                        int b21 = cell_box(p21);
+                        int b22 = cell_box(p22);
+                        bool validBoxes = ((b11 == b12 && b21 == b22 && b11 != b21) ||
+                                           (b11 == b21 && b12 == b22 && b11 != b12));
+                        if (!validBoxes) continue;
+
+                        int cells[4] = {p11, p12, p21, p22};
+                        int solvedCount = 0;
+                        int unfilledCell = -1;
+                        bool hasGivens = false;
+
+                        for (int c : cells) {
+                            if (board.is_given(c)) { hasGivens = true; break; }
+                            if (board.get_value(c) != 0) solvedCount++;
+                            else unfilledCell = c;
+                        }
+
+                        if (hasGivens || solvedCount != 3 || unfilledCell == -1) continue;
+
+                        std::vector<int> vals;
+                        for (int c : cells) {
+                            if (c != unfilledCell) vals.push_back(board.get_value(c));
+                        }
+
+                        int d1 = vals[0], d2 = -1;
+                        if (vals[1] == d1) d2 = vals[2];
+                        else if (vals[2] == d1) d2 = vals[1];
+                        else if (vals[1] == vals[2]) { d2 = vals[1]; }
+                        else continue;
+
+                        int deadlyDigit = (std::count(vals.begin(), vals.end(), d1) == 1) ? d1 : d2;
+
+                        if (board.has_candidate(unfilledCell, deadlyDigit)) {
+                            Step s;
+                            s.type = TechniqueType::AvoidableRectangle;
+                            s.name = "Avoidable Rectangle Type 1";
+                            s.difficulty = DifficultyLevel::Hard;
+                            s.score = 100;
+                            s.explanation = "Cells " + format_cell(cells[0]) + ", " + format_cell(cells[1]) + ", " +
+                                            format_cell(cells[2]) + ", " + format_cell(cells[3]) +
+                                            " form an Avoidable Rectangle on digits " + std::to_string(d1) + " and " +
+                                            std::to_string(d2) + ". Candidate " + std::to_string(deadlyDigit) +
+                                            " is eliminated from " + format_cell(unfilledCell) + " to preserve single solution.";
+                            s.eliminations.push_back({unfilledCell, deadlyDigit});
+                            for (int c : cells) s.primary_cells.set(c);
+
+                            steps.push_back(s);
+                        }
                     }
-                } else {
-                    return steps; // Cells with count != 2 and != 3 -> not BUG+1
                 }
-            }
-        }
-
-        if (tri_cell != -1 && unfilled_count >= 4) {
-            CandidateMask m = board.get_candidates(tri_cell);
-            int r = cell_row(tri_cell);
-            int c = cell_col(tri_cell);
-
-            // Find the candidate that appears 3 times in the row, col, or box
-            int bug_digit = -1;
-            for (int d = 1; d <= 9; ++d) {
-                if (mask_has_digit(m, d)) {
-                    int r_count = board.get_candidates_in_house(r, d).count();
-                    int c_count = board.get_candidates_in_house(9 + c, d).count();
-
-                    if (r_count == 3 || c_count == 3) {
-                        bug_digit = d;
-                        break;
-                    }
-                }
-            }
-
-            if (bug_digit != -1) {
-                Step step;
-                step.type = TechniqueType::Custom;
-                step.name = "BUG+1";
-                step.difficulty = DifficultyLevel::Hard;
-                step.score = 100;
-                step.primary_cells.set(tri_cell);
-                step.assignments.push_back({tri_cell, static_cast<uint8_t>(bug_digit)});
-
-                step.explanation = "BUG+1 at r" + std::to_string(r + 1) + "c" + std::to_string(c + 1) +
-                                  " sets value " + std::to_string(bug_digit) + " to avoid a Binary Universal Grave.";
-                steps.push_back(step);
             }
         }
 
         return steps;
     }
+
+private:
+    static void check_ur_patterns(const BoardState& board,
+                                  const int cells[4],
+                                  const CandidateMask masks[4],
+                                  int d1, int d2,
+                                  std::vector<Step>& steps) {
+        CandidateMask baseMask = digit_to_mask(d1) | digit_to_mask(d2);
+
+        std::vector<int> pureCells;
+        std::vector<int> extraCells;
+
+        for (int i = 0; i < 4; ++i) {
+            if (masks[i] == baseMask) {
+                pureCells.push_back(cells[i]);
+            } else {
+                extraCells.push_back(cells[i]);
+            }
+        }
+
+        // --- UR Type 1 ---
+        if (pureCells.size() == 3 && extraCells.size() == 1) {
+            int extraCell = extraCells[0];
+            Step s;
+            s.type = TechniqueType::UniqueRectangle;
+            s.name = "Unique Rectangle Type 1";
+            s.difficulty = DifficultyLevel::Hard;
+            s.score = 100;
+            s.explanation = "Cells " + format_cell(cells[0]) + ", " + format_cell(cells[1]) + ", " +
+                            format_cell(cells[2]) + ", " + format_cell(cells[3]) + " form a UR on {" +
+                            std::to_string(d1) + ", " + std::to_string(d2) + "}. Candidates " +
+                            std::to_string(d1) + " and " + std::to_string(d2) + " are eliminated from " +
+                            format_cell(extraCell) + " to avoid deadly pattern.";
+
+            s.eliminations.push_back({extraCell, d1});
+            s.eliminations.push_back({extraCell, d2});
+            for (int i = 0; i < 4; ++i) s.primary_cells.set(cells[i]);
+
+            steps.push_back(s);
+            return;
+        }
+
+        // --- UR Type 2 & Type 5 ---
+        if (pureCells.size() == 2 && extraCells.size() == 2) {
+            int e1 = extraCells[0];
+            int e2 = extraCells[1];
+            CandidateMask extra1 = masks_diff(board.get_candidates(e1), baseMask);
+            CandidateMask extra2 = masks_diff(board.get_candidates(e2), baseMask);
+
+            if (count_candidates(extra1) == 1 && extra1 == extra2) {
+                int extraDigit = get_single_digit(extra1);
+
+                BitSet81 commonPeers = GRID.peer_bitsets[e1] & GRID.peer_bitsets[e2];
+                std::vector<CandidateElimination> elims;
+
+                commonPeers.for_each_cell([&](int p) {
+                    if (board.is_unfilled(p) && board.has_candidate(p, extraDigit)) {
+                        elims.push_back({p, extraDigit});
+                    }
+                });
+
+                if (!elims.empty()) {
+                    bool sameLine = (cell_row(e1) == cell_row(e2) || cell_col(e1) == cell_col(e2));
+                    std::string urName = sameLine ? "Unique Rectangle Type 2" : "Unique Rectangle Type 5";
+
+                    Step s;
+                    s.type = TechniqueType::UniqueRectangle;
+                    s.name = urName;
+                    s.difficulty = DifficultyLevel::Hard;
+                    s.score = 100;
+                    s.explanation = "UR on {" + std::to_string(d1) + ", " + std::to_string(d2) + "} in cells " +
+                                    format_cell(cells[0]) + ", " + format_cell(cells[1]) + ", " +
+                                    format_cell(cells[2]) + ", " + format_cell(cells[3]) + " with extra candidate " +
+                                    std::to_string(extraDigit) + ". Eliminates " + std::to_string(extraDigit) + " from common peers.";
+
+                    s.eliminations = elims;
+                    for (int i = 0; i < 4; ++i) s.primary_cells.set(cells[i]);
+
+                    steps.push_back(s);
+                    return;
+                }
+            }
+        }
+
+        // --- UR Type 4 ---
+        if (pureCells.size() == 2 && extraCells.size() == 2) {
+            int e1 = extraCells[0];
+            int e2 = extraCells[1];
+            bool sameRow = (cell_row(e1) == cell_row(e2));
+            bool sameCol = (cell_col(e1) == cell_col(e2));
+
+            if (sameRow || sameCol) {
+                int house = sameRow ? cell_row(e1) : (9 + cell_col(e1));
+                const auto& houseCells = GRID.house_cells[house];
+
+                for (int testDigit : {d1, d2}) {
+                    int otherDigit = (testDigit == d1) ? d2 : d1;
+                    int countInHouse = 0;
+                    for (int hc : houseCells) {
+                        if (board.is_unfilled(hc) && board.has_candidate(hc, testDigit)) {
+                            countInHouse++;
+                        }
+                    }
+
+                    if (countInHouse == 2) {
+                        std::vector<CandidateElimination> elims;
+                        if (board.has_candidate(e1, otherDigit)) elims.push_back({e1, otherDigit});
+                        if (board.has_candidate(e2, otherDigit)) elims.push_back({e2, otherDigit});
+
+                        if (!elims.empty()) {
+                            Step s;
+                            s.type = TechniqueType::UniqueRectangle;
+                            s.name = "Unique Rectangle Type 4";
+                            s.difficulty = DifficultyLevel::Hard;
+                            s.score = 100;
+                            s.explanation = "UR Type 4 on {" + std::to_string(d1) + ", " + std::to_string(d2) + "}. " +
+                                            "Candidate " + std::to_string(testDigit) + " is locked in " +
+                                            format_cell(e1) + " and " + format_cell(e2) + ", eliminating " +
+                                            std::to_string(otherDigit) + " from both cells.";
+                            s.eliminations = elims;
+                            for (int i = 0; i < 4; ++i) s.primary_cells.set(cells[i]);
+
+                            steps.push_back(s);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- UR Type 3 (Subset) ---
+        if (pureCells.size() == 2 && extraCells.size() == 2) {
+            int e1 = extraCells[0];
+            int e2 = extraCells[1];
+            bool sameRow = (cell_row(e1) == cell_row(e2));
+            bool sameCol = (cell_col(e1) == cell_col(e2));
+
+            if (sameRow || sameCol) {
+                int house = sameRow ? cell_row(e1) : (9 + cell_col(e1));
+                CandidateMask extraMask = masks_diff(board.get_candidates(e1) | board.get_candidates(e2), baseMask);
+
+                if (count_candidates(extraMask) == 2) {
+                    for (int otherCell : GRID.house_cells[house]) {
+                        if (otherCell == e1 || otherCell == e2 || !board.is_unfilled(otherCell)) continue;
+                        CandidateMask om = board.get_candidates(otherCell);
+                        if (count_candidates(om) >= 1 && (om & ~extraMask) == 0) {
+                            std::vector<CandidateElimination> elims;
+                            for (int target : GRID.house_cells[house]) {
+                                if (target == e1 || target == e2 || target == otherCell || !board.is_unfilled(target)) continue;
+                                CandidateMask tm = board.get_candidates(target) & extraMask;
+                                for (int d = 1; d <= 9; ++d) {
+                                    if (mask_has_digit(tm, d)) {
+                                        elims.push_back({target, d});
+                                    }
+                                }
+                            }
+
+                            if (!elims.empty()) {
+                                Step s;
+                                s.type = TechniqueType::UniqueRectangle;
+                                s.name = "Unique Rectangle Type 3";
+                                s.difficulty = DifficultyLevel::Hard;
+                                s.score = 100;
+                                s.explanation = "UR Type 3 on {" + std::to_string(d1) + ", " + std::to_string(d2) +
+                                                "} with extra candidates forming a locked subset with " +
+                                                format_cell(otherCell) + ".";
+                                s.eliminations = elims;
+                                for (int i = 0; i < 4; ++i) s.primary_cells.set(cells[i]);
+                                s.primary_cells.set(otherCell);
+
+                                steps.push_back(s);
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static CandidateMask masks_diff(CandidateMask m1, CandidateMask m2) {
+        return m1 & ~m2;
+    }
 };
 
 } // namespace hodoku::core
-

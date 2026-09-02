@@ -94,6 +94,9 @@ public:
         auto bug = Uniqueness::find_bug_plus_one(board);
         if (!bug.empty()) return bug.front();
 
+        auto ar = Uniqueness::find_avoidable_rectangles(board);
+        if (!ar.empty()) return ar.front();
+
         // 8. Finned Fish
         auto fxw = Fish::find_finned_x_wings(board);
         if (!fxw.empty()) return fxw.front();
@@ -191,6 +194,7 @@ public:
         append(Wings::find_w_wings(board));
         append(Uniqueness::find_unique_rectangles(board));
         append(Uniqueness::find_bug_plus_one(board));
+        append(Uniqueness::find_avoidable_rectangles(board));
         append(Fish::find_finned_x_wings(board));
         append(Coloring::find_simple_colors(board));
         append(Chains::find_remote_pairs(board));

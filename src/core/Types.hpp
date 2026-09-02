@@ -98,5 +98,9 @@ enum class CellStatus : uint8_t {
     return "Unknown";
 }
 
+inline std::string format_cell(int cell) {
+    return "r" + std::to_string(cell_row(cell) + 1) + "c" + std::to_string(cell_col(cell) + 1);
+}
+
 } // namespace hodoku::core
 
