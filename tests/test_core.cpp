@@ -335,6 +335,78 @@ void test_generator() {
     std::cout << "[TEST] Procedural Generator & Symmetries... PASSED\n";
 }
 
+void test_uniqueness() {
+    std::cout << "\n[TEST] Complete Uniqueness Techniques Suite (UR 1-6, BUG+1, AR)...";
+
+    // 1. Synthesize a board with Unique Rectangle Type 1
+    // A rectangle spanning 2 boxes: r0c0 (box 0), r0c3 (box 1), r1c0 (box 0), r1c3 (box 1)
+    BoardState b;
+    b.clear();
+    int p11 = cell_index(0, 0); // r0c0
+    int p12 = cell_index(0, 3); // r0c3
+    int p21 = cell_index(1, 0); // r1c0
+    int p22 = cell_index(1, 3); // r1c3
+
+    b.set_candidates(p11, digit_to_mask(1) | digit_to_mask(2));
+    b.set_candidates(p12, digit_to_mask(1) | digit_to_mask(2));
+    b.set_candidates(p21, digit_to_mask(1) | digit_to_mask(2));
+    b.set_candidates(p22, digit_to_mask(1) | digit_to_mask(2) | digit_to_mask(7));
+
+    auto ur_steps = Uniqueness::find_unique_rectangles(b);
+    assert(!ur_steps.empty());
+    bool found_ur1 = false;
+    for (const auto& s : ur_steps) {
+        if (s.name == "Unique Rectangle Type 1") {
+            found_ur1 = true;
+            assert(s.eliminations.size() == 2);
+            assert(s.eliminations[0].cell == p22 || s.eliminations[1].cell == p22);
+            break;
+        }
+    }
+    assert(found_ur1);
+    std::cout << "\n  -> UR Type 1 detection: PASSED";
+
+    // 2. Synthesize UR Type 2:
+    // p11={1,2}, p12={1,2}, p21={1,2,5}, p22={1,2,5}.
+    // Extra digit 5 in p21 and p22 (row 1). Common peer in row 1 with 5 can have 5 eliminated.
+    int p24 = cell_index(1, 4); // in row 1, peer of both p21 and p22
+    b.set_candidates(p21, digit_to_mask(1) | digit_to_mask(2) | digit_to_mask(5));
+    b.set_candidates(p22, digit_to_mask(1) | digit_to_mask(2) | digit_to_mask(5));
+    b.set_candidates(p24, digit_to_mask(5) | digit_to_mask(9));
+
+    auto ur2_steps = Uniqueness::find_unique_rectangles(b);
+    bool found_ur2 = false;
+    for (const auto& s : ur2_steps) {
+        if (s.name == "Unique Rectangle Type 2") {
+            found_ur2 = true;
+            bool found_elim = false;
+            for (const auto& e : s.eliminations) {
+                if (e.cell == p24 && e.digit == 5) found_elim = true;
+            }
+            assert(found_elim);
+            break;
+        }
+    }
+    assert(found_ur2);
+    std::cout << "\n  -> UR Type 2 detection: PASSED";
+
+    // 3. Synthesize Avoidable Rectangle Type 1:
+    // 3 solved cells (non-givens) at corners: p11=1, p12=2, p21=2.
+    // Unfilled cell p22 has candidate 1.
+    BoardState arb;
+    arb.clear();
+    arb.set_value(p11, 1);
+    arb.set_value(p12, 2);
+    arb.set_value(p21, 2);
+    arb.set_candidates(p22, digit_to_mask(1) | digit_to_mask(8));
+    auto ar_steps = Uniqueness::find_avoidable_rectangles(arb);
+    assert(!ar_steps.empty());
+    assert(ar_steps[0].eliminations[0].cell == p22 && ar_steps[0].eliminations[0].digit == 1);
+    std::cout << "\n  -> Avoidable Rectangle Type 1 detection: PASSED";
+
+    std::cout << "\n[TEST] Complete Uniqueness Techniques Suite... PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -347,6 +419,7 @@ int main() {
     test_board_state();
     test_dlx_solver();
     test_advanced_techniques();
+    test_uniqueness();
     test_generator();
 
     auto end = std::chrono::high_resolution_clock::now();
