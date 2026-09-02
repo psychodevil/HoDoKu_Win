@@ -81,6 +81,8 @@ public:
                             step.primary_cells.set(p2);
 
                             step.eliminations = elims;
+                            step.links.push_back({pivot, x, p1, x, true});
+                            step.links.push_back({pivot, y, p2, y, true});
 
                             step.explanation = "XY-Wing with pivot r" + std::to_string(cell_row(pivot) + 1) + "c" + std::to_string(cell_col(pivot) + 1) +
                                               " (" + std::to_string(x) + "," + std::to_string(y) + ") and pincers r" +

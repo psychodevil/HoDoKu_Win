@@ -48,6 +48,14 @@ struct CandidateAssignment {
     int digit{0};
 };
 
+struct StepLink {
+    int from_cell{0};
+    int from_digit{0};
+    int to_cell{0};
+    int to_digit{0};
+    bool is_strong{true};
+};
+
 struct Step {
     TechniqueType type{TechniqueType::FullHouse};
     std::string name;
@@ -60,6 +68,7 @@ struct Step {
     BitSet81 secondary_cells;
     std::vector<CandidateAssignment> assignments;
     std::vector<CandidateElimination> eliminations;
+    std::vector<StepLink> links;
 
     // Helper to check if step actually does anything
     [[nodiscard]] bool has_effect() const noexcept {

@@ -172,6 +172,9 @@ public:
                                 step.score = 160;
                                 for (int c : chain) step.primary_cells.set(c);
                                 step.eliminations = elims;
+                                for (size_t ci = 0; ci + 1 < chain.size(); ++ci) {
+                                    step.links.push_back({chain[ci], 0, chain[ci + 1], 0, (ci % 2 == 0)});
+                                }
 
                                 step.explanation = "XY-Chain on digit " + std::to_string(start_d) +
                                                   " of length " + std::to_string(chain.size()) +
