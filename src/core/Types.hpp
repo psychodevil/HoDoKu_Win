@@ -87,8 +87,15 @@ enum class CellStatus : uint8_t {
     return (cell / 27) * 3 + (cell % 9) / 3;
 }
 
-[[nodiscard]] constexpr int box_row_col(int row, int col) noexcept {
-    return (row / 3) * 3 + (col / 3);
+[[nodiscard]] constexpr std::string_view difficulty_name(DifficultyLevel level) noexcept {
+    switch (level) {
+        case DifficultyLevel::Easy: return "Easy";
+        case DifficultyLevel::Medium: return "Medium";
+        case DifficultyLevel::Hard: return "Hard";
+        case DifficultyLevel::Unfair: return "Unfair";
+        case DifficultyLevel::Extreme: return "Extreme";
+    }
+    return "Unknown";
 }
 
 } // namespace hodoku::core

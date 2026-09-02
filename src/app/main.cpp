@@ -29,6 +29,7 @@
 #include "../core/Fish.hpp"
 #include "../core/Wings.hpp"
 #include "../core/StepFinder.hpp"
+#include "../core/Generator.hpp"
 
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "comctl32.lib")
@@ -204,7 +205,20 @@ public:
 
     void new_puzzle(int levelIndex) {
         DifficultyLevel lvl = static_cast<DifficultyLevel>(std::clamp(levelIndex, 0, 4));
-        load_puzzle_by_level(lvl);
+        BoardState puz = m_generator.generate_puzzle(lvl, SymmetryType::Rotational180, 8);
+        m_initialBoard = puz;
+        m_board = m_initialBoard;
+        m_hardestLevel = lvl;
+        m_totalScore = 0;
+        m_selectedStep.reset();
+        m_hintLevel = HintLevel::None;
+        m_cellColors.fill(0);
+        for (auto& row : m_candidateColors) row.fill(0);
+        m_activeCandidateColor = -1;
+        m_undoStack.clear();
+        m_redoStack.clear();
+        recalculate_solution_path();
+        recalculate_fas();
     }
 
     void reset_puzzle() {
@@ -834,6 +848,7 @@ private:
     BoardState m_board;
     BoardState m_initialBoard;
     DlxSolver m_solver;
+    SudokuGenerator m_generator;
 
     std::vector<StudioSnapshot> m_undoStack;
     std::vector<StudioSnapshot> m_redoStack;

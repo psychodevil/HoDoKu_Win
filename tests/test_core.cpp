@@ -18,6 +18,7 @@
 #include "core/AlmostLockedSets.hpp"
 #include "core/SueDeCoq.hpp"
 #include "core/StepFinder.hpp"
+#include "core/Generator.hpp"
 
 using namespace hodoku::core;
 
@@ -273,6 +274,64 @@ void test_advanced_techniques() {
     std::cout << "\n[TEST] All technique modules successfully executed... PASSED\n";
 }
 
+void test_generator() {
+    std::cout << "\n[TEST] Procedural Generator & Symmetries...\n";
+    SudokuGenerator gen(42);
+
+    std::cout << "  -> Testing random terminal grid generation...";
+    BoardState terminal = gen.generate_terminal_grid();
+    assert(terminal.unfilled_count() == 0);
+    // Verify terminal grid is completely valid
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int val = terminal.get_value(cell);
+        assert(val >= 1 && val <= 9);
+        int r = cell_row(cell), c = cell_col(cell), b = cell_box(cell);
+        for (int p = 0; p < TOTAL_CELLS; ++p) {
+            if (p != cell && (cell_row(p) == r || cell_col(p) == c || cell_box(p) == b)) {
+                assert(terminal.get_value(p) != val);
+            }
+        }
+    }
+    std::cout << " VALID 81-digit terminal grid!\n";
+
+    std::cout << "  -> Testing symmetric clue digging (Rotational180)...";
+    BoardState puzzle180 = gen.dig_puzzle(terminal, SymmetryType::Rotational180);
+    DlxSolver dlx;
+    assert(dlx.count_solutions(puzzle180, 2) == 1);
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell), c = cell_col(cell);
+        int symm = cell_index(8 - r, 8 - c);
+        bool has1 = (puzzle180.get_value(cell) != 0);
+        bool has2 = (puzzle180.get_value(symm) != 0);
+        assert(has1 == has2);
+    }
+    std::cout << " 180 deg symmetric with UNIQUE solution (" << puzzle180.get_givens().count() << " clues)!\n";
+
+    std::cout << "  -> Testing symmetric clue digging (Rotational90)...";
+    BoardState puzzle90 = gen.dig_puzzle(terminal, SymmetryType::Rotational90);
+    assert(dlx.count_solutions(puzzle90, 2) == 1);
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell), c = cell_col(cell);
+        int p1 = cell_index(c, 8 - r);
+        int p2 = cell_index(8 - r, 8 - c);
+        int p3 = cell_index(8 - c, r);
+        bool v0 = (puzzle90.get_value(cell) != 0);
+        assert(v0 == (puzzle90.get_value(p1) != 0));
+        assert(v0 == (puzzle90.get_value(p2) != 0));
+        assert(v0 == (puzzle90.get_value(p3) != 0));
+    }
+    std::cout << " 90 deg 4-fold symmetric with UNIQUE solution (" << puzzle90.get_givens().count() << " clues)!\n";
+
+    std::cout << "  -> Testing targeted difficulty generation (Easy)...";
+    BoardState easyPuz = gen.generate_puzzle(DifficultyLevel::Easy, SymmetryType::Rotational180, 5);
+    assert(dlx.count_solutions(easyPuz, 2) == 1);
+    int score = 0;
+    DifficultyLevel lvl = gen.evaluate_difficulty(easyPuz, score);
+    std::cout << " Generated " << difficulty_name(lvl) << " puzzle (Score: " << score << ", Clues: " << easyPuz.get_givens().count() << ")!\n";
+
+    std::cout << "[TEST] Procedural Generator & Symmetries... PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -285,6 +344,7 @@ int main() {
     test_board_state();
     test_dlx_solver();
     test_advanced_techniques();
+    test_generator();
 
     auto end = std::chrono::high_resolution_clock::now();
     auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
