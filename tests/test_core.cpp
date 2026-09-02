@@ -271,10 +271,6 @@ void test_advanced_techniques() {
     assert(!als_list.empty());
     std::cout << "\n  -> Discovered " << als_list.size() << " Almost Locked Sets (ALS)";
 
-    auto sdc_list = SueDeCoq::find_sue_de_coq(b_hard);
-    auto db_list = DeathBlossom::find_death_blossom(b_hard);
-    std::cout << "\n  -> Evaluated Sue de Coq and Death Blossom (" << sdc_list.size() << " SDC, " << db_list.size() << " DB)";
-
     auto tmpl_steps = Templates::find_template_steps(b_hard);
     std::cout << "\n  -> Evaluated Forcing Chains and Templates (" << tmpl_steps.size() << " template steps evaluated)";
 
