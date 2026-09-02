@@ -156,13 +156,23 @@ enum MenuAndControlId {
     IDC_ZOOM_CAND_BASE = 6021,  // 6021..6029
     IDC_ZOOM_COLOR_LABEL = 6030,
     IDC_ZOOM_COLOR_BASE = 6031, // 6031..6040 (0..9)
-    IDC_ZOOM_DETAILS = 6050
+    IDC_ZOOM_DETAILS = 6050,
+    IDC_ZOOM_CAND_STATUS = 6060,
+    IDC_ZOOM_CAND_COLOR_BASE = 6061, // 6061..6070 (0..9)
+    IDC_ZOOM_CAND_CLEAR_BTN = 6071
+};
+
+struct StudioSnapshot {
+    BoardState board;
+    std::array<uint8_t, TOTAL_CELLS> cellColors;
+    std::array<std::array<uint8_t, 9>, TOTAL_CELLS> candColors;
 };
 
 class HoDoKuStudio {
 public:
     HoDoKuStudio() {
         m_cellColors.fill(0);
+        for (auto& row : m_candidateColors) row.fill(0);
         load_puzzle_by_level(DifficultyLevel::Easy);
     }
 
@@ -174,6 +184,8 @@ public:
                 m_undoStack.clear();
                 m_redoStack.clear();
                 m_cellColors.fill(0);
+                for (auto& row : m_candidateColors) row.fill(0);
+                m_activeCandidateColor = -1;
                 m_selectedCell = 0;
                 m_selectedStep.reset();
                 m_hintLevel = HintLevel::None;
@@ -194,9 +206,11 @@ public:
     void reset_puzzle() {
         push_undo();
         m_board = m_initialBoard;
+        m_cellColors.fill(0);
+        for (auto& row : m_candidateColors) row.fill(0);
+        m_activeCandidateColor = -1;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
-        m_cellColors.fill(0);
         recalculate_solution_path();
         recalculate_fas();
     }
@@ -206,25 +220,28 @@ public:
         m_board.clear();
         m_initialBoard.clear();
         m_selectedCell = 0;
+        m_cellColors.fill(0);
+        for (auto& row : m_candidateColors) row.fill(0);
+        m_activeCandidateColor = -1;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
-        m_cellColors.fill(0);
         m_solutionPath.clear();
         m_fasSteps.clear();
     }
 
     void push_undo() {
-        m_undoStack.push_back({m_board, m_cellColors});
+        m_undoStack.push_back({m_board, m_cellColors, m_candidateColors});
         m_redoStack.clear();
     }
 
     void undo() {
         if (!m_undoStack.empty()) {
-            m_redoStack.push_back({m_board, m_cellColors});
+            m_redoStack.push_back({m_board, m_cellColors, m_candidateColors});
             auto state = m_undoStack.back();
             m_undoStack.pop_back();
-            m_board = state.first;
-            m_cellColors = state.second;
+            m_board = state.board;
+            m_cellColors = state.cellColors;
+            m_candidateColors = state.candColors;
             m_selectedStep.reset();
             m_hintLevel = HintLevel::None;
             recalculate_solution_path();
@@ -234,16 +251,71 @@ public:
 
     void redo() {
         if (!m_redoStack.empty()) {
-            m_undoStack.push_back({m_board, m_cellColors});
+            m_undoStack.push_back({m_board, m_cellColors, m_candidateColors});
             auto state = m_redoStack.back();
             m_redoStack.pop_back();
-            m_board = state.first;
-            m_cellColors = state.second;
+            m_board = state.board;
+            m_cellColors = state.cellColors;
+            m_candidateColors = state.candColors;
             m_selectedStep.reset();
             m_hintLevel = HintLevel::None;
             recalculate_solution_path();
             recalculate_fas();
         }
+    }
+
+    void set_candidate_color(int cell, int digit, int colorIdx) {
+        if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return;
+        push_undo();
+        m_candidateColors[cell][digit - 1] = static_cast<uint8_t>(colorIdx);
+    }
+
+    int get_candidate_color(int cell, int digit) const {
+        if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return 0;
+        return m_candidateColors[cell][digit - 1];
+    }
+
+    void clear_candidate_colors_in_cell(int cell) {
+        if (cell < 0 || cell >= TOTAL_CELLS) return;
+        push_undo();
+        m_candidateColors[cell].fill(0);
+    }
+
+    void set_active_candidate_color(int col) {
+        m_activeCandidateColor = col;
+    }
+
+    int get_active_candidate_color() const {
+        return m_activeCandidateColor;
+    }
+
+    void set_digit_at_cell(int cell, int digit) {
+        if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return;
+        if (m_board.is_given(cell)) return;
+        push_undo();
+        m_board.set_value(cell, static_cast<uint8_t>(digit));
+        recalculate_solution_path();
+        recalculate_fas();
+    }
+
+    int hit_test_candidate(int x, int y, int cell) const {
+        if (cell < 0 || cell >= TOTAL_CELLS || m_cellSize <= 0.0f) return 0;
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+        float cx = m_offsetX + c * m_cellSize;
+        float cy = m_offsetY + r * m_cellSize;
+        float relX = x - cx;
+        float relY = y - cy;
+        if (relX < 0.0f || relX >= m_cellSize || relY < 0.0f || relY >= m_cellSize) return 0;
+
+        float sub = m_cellSize / 3.0f;
+        int subC = static_cast<int>(relX / sub);
+        int subR = static_cast<int>(relY / sub);
+        if (subC >= 0 && subC < 3 && subR >= 0 && subR < 3) {
+            int digit = subR * 3 + subC + 1;
+            return digit;
+        }
+        return 0;
     }
 
     // Filter Operations
@@ -686,6 +758,13 @@ public:
                         float ky = cy + dr * subCell;
                         RectF candRect(kx, ky, subCell, subCell);
 
+                        // Candidate-level custom coloring background
+                        int candCol = m_candidateColors[cell][d - 1];
+                        if (candCol > 0 && candCol < 10) {
+                            SolidBrush candBg(HODOKU_PALETTE[candCol]);
+                            g.FillRectangle(&candBg, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                        }
+
                         bool isElim = false;
                         if (m_hintLevel == HintLevel::Concrete && m_selectedStep) {
                             for (const auto& elim : m_selectedStep->eliminations) {
@@ -752,9 +831,11 @@ private:
     BoardState m_initialBoard;
     DlxSolver m_solver;
 
-    std::vector<std::pair<BoardState, std::array<uint8_t, TOTAL_CELLS>>> m_undoStack;
-    std::vector<std::pair<BoardState, std::array<uint8_t, TOTAL_CELLS>>> m_redoStack;
+    std::vector<StudioSnapshot> m_undoStack;
+    std::vector<StudioSnapshot> m_redoStack;
     std::array<uint8_t, TOTAL_CELLS> m_cellColors{};
+    std::array<std::array<uint8_t, 9>, TOTAL_CELLS> m_candidateColors{};
+    int m_activeCandidateColor{-1};
 
     std::vector<Step> m_solutionPath;
     std::vector<Step> m_fasSteps;
@@ -799,6 +880,9 @@ static HWND g_hZoomCandBtns[9] = {NULL};
 static HWND g_hZoomColorLabel = NULL;
 static HWND g_hZoomColorBtns[10] = {NULL};
 static HWND g_hZoomDetailsLabel = NULL;
+static HWND g_hZoomCandStatus = NULL;
+static HWND g_hZoomCandClearBtn = NULL;
+static HWND g_hZoomCandColorBtns[10] = {NULL};
 
 static TabView g_currentTab = TabView::SolutionPath;
 static std::vector<HWND> g_toolbarButtons;
@@ -865,6 +949,11 @@ void ShowActiveCellControls(BOOL show) {
         if (g_hZoomColorBtns[i]) ShowWindow(g_hZoomColorBtns[i], cmd);
     }
     if (g_hZoomDetailsLabel) ShowWindow(g_hZoomDetailsLabel, cmd);
+    if (g_hZoomCandStatus) ShowWindow(g_hZoomCandStatus, cmd);
+    for (int i = 0; i < 10; ++i) {
+        if (g_hZoomCandColorBtns[i]) ShowWindow(g_hZoomCandColorBtns[i], cmd);
+    }
+    if (g_hZoomCandClearBtn) ShowWindow(g_hZoomCandClearBtn, cmd);
 }
 
 void LayoutActiveCellControls(int x, int y, int w, int h) {
@@ -931,6 +1020,19 @@ void LayoutActiveCellControls(int x, int y, int w, int h) {
 
     // 5. "Choose Color for Candidates:"
     if (g_hZoomDetailsLabel) MoveWindow(g_hZoomDetailsLabel, colorLeft, y_cur, 190, 16, TRUE);
+    y_cur += 20;
+
+    // Candidate Preview box on left (30x30)
+    if (g_hZoomCandStatus) MoveWindow(g_hZoomCandStatus, colorLeft, y_cur, 30, 30, TRUE);
+
+    for (int i = 0; i < 10; ++i) {
+        int r = i / 5;
+        int c = i % 5;
+        int cx = swStartX + c * (col_w + 2);
+        int cy = y_cur + r * (col_h + 2);
+        if (g_hZoomCandColorBtns[i]) MoveWindow(g_hZoomCandColorBtns[i], cx, cy, col_w, col_h, TRUE);
+    }
+    if (g_hZoomCandClearBtn) MoveWindow(g_hZoomCandClearBtn, swStartX + 5 * (col_w + 2), y_cur + 2, 22, 26, TRUE);
 }
 
 void UpdateActiveCellPanel() {
@@ -983,6 +1085,7 @@ void UpdateActiveCellPanel() {
     }
 
     if (g_hZoomStatus) InvalidateRect(g_hZoomStatus, NULL, TRUE);
+    if (g_hZoomCandStatus) InvalidateRect(g_hZoomCandStatus, NULL, TRUE);
 }
 
 void SwitchTab(TabView tab) {
@@ -1371,6 +1474,17 @@ void CreateHoDoKuUI(HWND hwnd) {
     g_hZoomDetailsLabel = CreateWindowW(L"STATIC", L"Choose Color for Candidates:", WS_CHILD | SS_LEFT,
                                         0, 0, 10, 10, hwnd, (HMENU)(INT_PTR)IDC_ZOOM_DETAILS, NULL, NULL);
     SendMessage(g_hZoomDetailsLabel, WM_SETFONT, (WPARAM)hLabelFont, TRUE);
+
+    g_hZoomCandStatus = CreateWindowW(L"BUTTON", L"", WS_CHILD | BS_OWNERDRAW,
+                                      0, 0, 10, 10, hwnd, (HMENU)(INT_PTR)IDC_ZOOM_CAND_STATUS, NULL, NULL);
+
+    for (int i = 0; i < 10; ++i) {
+        g_hZoomCandColorBtns[i] = CreateWindowW(L"BUTTON", L"", WS_CHILD | BS_OWNERDRAW,
+                                                0, 0, 10, 10, hwnd, (HMENU)(INT_PTR)(IDC_ZOOM_CAND_COLOR_BASE + i), NULL, NULL);
+    }
+
+    g_hZoomCandClearBtn = CreateWindowW(L"BUTTON", L"R", WS_CHILD | BS_OWNERDRAW,
+                                        0, 0, 10, 10, hwnd, (HMENU)(INT_PTR)IDC_ZOOM_CAND_CLEAR_BTN, NULL, NULL);
 
     // 5. Full-width Bottom Hint Panel Controls (Exact HoDoKu layout)
     g_hHintEdit = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | WS_VSCROLL,
@@ -1804,10 +1918,50 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_LBUTTONDOWN: {
         int x = GET_X_LPARAM(lParam);
         int y = GET_Y_LPARAM(lParam);
+        bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        if (g_studio) {
+            int cell = g_studio->hit_test_grid(x, y);
+            if (cell != -1) {
+                int candDigit = g_studio->hit_test_candidate(x, y, cell);
+                if (g_studio->get_board().is_unfilled(cell) && candDigit >= 1 && candDigit <= 9 &&
+                    g_studio->get_board().has_candidate(cell, candDigit)) {
+                    int actCandCol = g_studio->get_active_candidate_color();
+                    if ((isShift || isCtrl || actCandCol >= 0) && actCandCol >= 0) {
+                        // Apply active candidate color
+                        g_studio->set_candidate_color(cell, candDigit, actCandCol);
+                    } else if (isShift || isCtrl) {
+                        // Toggle candidate
+                        g_studio->set_selected_cell(cell);
+                        g_studio->toggle_candidate_at_selected(candDigit);
+                    } else {
+                        // Direct left-click on candidate pencilmark sets cell value!
+                        g_studio->set_selected_cell(cell);
+                        g_studio->set_digit_at_cell(cell, candDigit);
+                    }
+                } else {
+                    g_studio->set_selected_cell(cell);
+                }
+                if (g_currentTab == TabView::ActiveCell) {
+                    UpdateActiveCellPanel();
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+    case WM_RBUTTONDOWN: {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
         if (g_studio) {
             int cell = g_studio->hit_test_grid(x, y);
             if (cell != -1) {
                 g_studio->set_selected_cell(cell);
+                int candDigit = g_studio->hit_test_candidate(x, y, cell);
+                if (g_studio->get_board().is_unfilled(cell) && candDigit >= 1 && candDigit <= 9) {
+                    // Direct right-click on candidate toggles candidate!
+                    g_studio->toggle_candidate_at_selected(candDigit);
+                }
                 if (g_currentTab == TabView::ActiveCell) {
                     UpdateActiveCellPanel();
                 }
@@ -1883,6 +2037,58 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (pdis->CtlID == IDC_ZOOM_STATUS) {
             int cell = g_studio ? g_studio->get_selected_cell() : -1;
             int curCol = (cell >= 0 && g_studio) ? g_studio->get_cell_color(cell) : -1;
+            HBRUSH hBrush;
+            if (curCol >= 0 && curCol < 10) {
+                Color c = HODOKU_PALETTE[curCol];
+                hBrush = CreateSolidBrush(RGB(c.GetR(), c.GetG(), c.GetB()));
+            } else {
+                hBrush = CreateSolidBrush(RGB(255, 255, 255));
+            }
+            FillRect(pdis->hDC, &pdis->rcItem, hBrush);
+            DeleteObject(hBrush);
+
+            HBRUSH hBorder = CreateSolidBrush(RGB(80, 80, 80));
+            FrameRect(pdis->hDC, &pdis->rcItem, hBorder);
+            DeleteObject(hBorder);
+            return TRUE;
+        }
+
+        // 1b. Candidate Color Palette Buttons
+        if (pdis->CtlID >= IDC_ZOOM_CAND_COLOR_BASE && pdis->CtlID <= IDC_ZOOM_CAND_COLOR_BASE + 9) {
+            int slotIdx = pdis->CtlID - IDC_ZOOM_CAND_COLOR_BASE;
+            int colIdx = SWATCH_COLOR_MAP[slotIdx];
+            Color c = HODOKU_PALETTE[colIdx];
+            HBRUSH hBrush = CreateSolidBrush(RGB(c.GetR(), c.GetG(), c.GetB()));
+            FillRect(pdis->hDC, &pdis->rcItem, hBrush);
+            DeleteObject(hBrush);
+
+            HBRUSH hBorder = CreateSolidBrush(RGB(150, 150, 150));
+            FrameRect(pdis->hDC, &pdis->rcItem, hBorder);
+            DeleteObject(hBorder);
+            return TRUE;
+        }
+        if (pdis->CtlID == IDC_ZOOM_CAND_CLEAR_BTN) {
+            HBRUSH hBrush = CreateSolidBrush(RGB(245, 245, 245));
+            FillRect(pdis->hDC, &pdis->rcItem, hBrush);
+            DeleteObject(hBrush);
+
+            HBRUSH hBorder = CreateSolidBrush(RGB(150, 150, 150));
+            FrameRect(pdis->hDC, &pdis->rcItem, hBorder);
+            DeleteObject(hBorder);
+
+            SetBkMode(pdis->hDC, TRANSPARENT);
+            SetTextColor(pdis->hDC, RGB(40, 40, 40));
+            HFONT hFont = CreateFontW(12, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                     DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                     DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+            HFONT hOld = (HFONT)SelectObject(pdis->hDC, hFont);
+            DrawTextW(pdis->hDC, L"R", 1, &pdis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(pdis->hDC, hOld);
+            DeleteObject(hFont);
+            return TRUE;
+        }
+        if (pdis->CtlID == IDC_ZOOM_CAND_STATUS) {
+            int curCol = g_studio ? g_studio->get_active_candidate_color() : -1;
             HBRUSH hBrush;
             if (curCol >= 0 && curCol < 10) {
                 Color c = HODOKU_PALETTE[curCol];
@@ -2082,6 +2288,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int slotIdx = id - IDC_ZOOM_COLOR_BASE;
             int colorIdx = SWATCH_COLOR_MAP[slotIdx];
             g_studio->set_selected_cell_color(colorIdx);
+            UpdateActiveCellPanel();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id >= IDC_ZOOM_CAND_COLOR_BASE && id <= IDC_ZOOM_CAND_COLOR_BASE + 9) {
+            int slotIdx = id - IDC_ZOOM_CAND_COLOR_BASE;
+            int colorIdx = SWATCH_COLOR_MAP[slotIdx];
+            g_studio->set_active_candidate_color(colorIdx);
+            UpdateActiveCellPanel();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDC_ZOOM_CAND_CLEAR_BTN) {
+            g_studio->set_active_candidate_color(-1);
+            int cell = g_studio->get_selected_cell();
+            if (cell >= 0) {
+                g_studio->clear_candidate_colors_in_cell(cell);
+            }
             UpdateActiveCellPanel();
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_FILE_EXIT) {
