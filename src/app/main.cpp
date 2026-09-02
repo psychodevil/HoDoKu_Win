@@ -44,7 +44,7 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         g_studio->set_game_mode(GameMode::Practicing);
         UpdateStatusBarText(*g_studio);
         UpdateHintBoxText(*g_studio);
-        ShowPracticingDialog(g_hwnd);
+        ShowPracticingDialog(g_hwnd, *g_studio);
         InvalidateRect(g_hwnd, NULL, FALSE);
         return true;
     }
@@ -553,7 +553,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_studio->set_game_mode(GameMode::Practicing);
             UpdateStatusBarText(*g_studio);
             UpdateHintBoxText(*g_studio);
-            ShowPracticingDialog(hwnd);
+            ShowPracticingDialog(hwnd, *g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_CONFIG_TRAINING) {
+            ShowTrainingConfigDialog(hwnd, *g_studio);
+            UpdateStatusBarText(*g_studio);
+            UpdateHintBoxText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_FILE_COPY_GIVENS) {
             SetClipboardText(hwnd, g_studio->export_givens_string());

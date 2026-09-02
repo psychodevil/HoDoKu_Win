@@ -1,5 +1,11 @@
 #pragma once
 
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <atomic>
+#include <map>
 #include "AppTypes.hpp"
 #include "../core/StepFinder.hpp"
 #include "../core/SimpleTechniques.hpp"
@@ -12,6 +18,55 @@ public:
         m_cellColors.fill(0);
         for (auto& row : m_candidateColors) row.fill(0);
         load_puzzle_by_level(DifficultyLevel::Easy);
+        start_background_generator();
+    }
+
+    ~HoDoKuStudio() {
+        stop_background_generator();
+    }
+
+    void start_background_generator() {
+        m_bgRunning = true;
+        m_bgWorker = std::thread([this]() {
+            while (m_bgRunning) {
+                DifficultyLevel targetLvl = DifficultyLevel::Easy;
+                bool needGen = false;
+
+                {
+                    std::lock_guard<std::mutex> lock(m_bgMtx);
+                    for (int l = 0; l <= 4; ++l) {
+                        DifficultyLevel lvl = static_cast<DifficultyLevel>(l);
+                        if (m_bgCache[lvl].size() < 2) {
+                            targetLvl = lvl;
+                            needGen = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (needGen && m_bgRunning) {
+                    BoardState puz = m_generator.generate_puzzle(targetLvl, SymmetryType::Rotational180, 8);
+                    {
+                        std::lock_guard<std::mutex> lock(m_bgMtx);
+                        m_bgCache[targetLvl].push(puz);
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                } else {
+                    std::unique_lock<std::mutex> lock(m_bgMtx);
+                    m_bgCv.wait_for(lock, std::chrono::seconds(2), [this]() {
+                        return !m_bgRunning;
+                    });
+                }
+            }
+        });
+    }
+
+    void stop_background_generator() {
+        m_bgRunning = false;
+        m_bgCv.notify_all();
+        if (m_bgWorker.joinable()) {
+            m_bgWorker.join();
+        }
     }
 
     void load_puzzle_by_level(DifficultyLevel level) {
@@ -38,7 +93,27 @@ public:
 
     void new_puzzle(int levelIndex) {
         DifficultyLevel lvl = static_cast<DifficultyLevel>(std::clamp(levelIndex, 0, 4));
-        BoardState puz = m_generator.generate_puzzle(lvl, SymmetryType::Rotational180, 8);
+        BoardState puz;
+
+        if (m_gameMode == GameMode::Practicing && !m_trainingTechniques.empty()) {
+            puz = m_generator.generate_training_puzzle(m_trainingTechniques, SymmetryType::Rotational180, 25);
+        } else {
+            bool fromCache = false;
+            {
+                std::lock_guard<std::mutex> lock(m_bgMtx);
+                if (!m_bgCache[lvl].empty()) {
+                    puz = m_bgCache[lvl].front();
+                    m_bgCache[lvl].pop();
+                    fromCache = true;
+                }
+            }
+            if (fromCache) {
+                m_bgCv.notify_one();
+            } else {
+                puz = m_generator.generate_puzzle(lvl, SymmetryType::Rotational180, 8);
+            }
+        }
+
         m_initialBoard = puz;
         m_board = m_initialBoard;
         m_hardestLevel = lvl;
@@ -532,6 +607,9 @@ public:
         return (cell >= 0 && cell < TOTAL_CELLS) ? m_cellColors[cell] : 0;
     }
 
+    const std::vector<TechniqueType>& get_training_techniques() const { return m_trainingTechniques; }
+    void set_training_techniques(const std::vector<TechniqueType>& techs) { m_trainingTechniques = techs; }
+
     const std::vector<Step>& get_solution_path() const { return m_solutionPath; }
     const std::vector<Step>& get_fas_steps() const { return m_fasSteps; }
     const BoardState& get_board() const { return m_board; }
@@ -562,6 +640,14 @@ private:
     DifficultyLevel m_hardestLevel{DifficultyLevel::Easy};
     std::vector<Savepoint> m_savepoints;
     bool m_colorKuMode{false};
+
+    std::vector<TechniqueType> m_trainingTechniques;
+
+    std::mutex m_bgMtx;
+    std::condition_variable m_bgCv;
+    std::atomic<bool> m_bgRunning{false};
+    std::map<DifficultyLevel, std::queue<BoardState>> m_bgCache;
+    std::thread m_bgWorker;
 };
 
 } // namespace hodoku::ui

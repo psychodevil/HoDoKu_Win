@@ -225,14 +225,65 @@ inline void ShowPreferencesDialog(HWND hParent) {
         L"Preferences - HoDoKu", MB_OK | MB_ICONINFORMATION);
 }
 
-inline void ShowPracticingDialog(HWND hParent) {
-    MessageBoxW(hParent,
+inline void ShowTrainingConfigDialog(HWND hwnd, HoDoKuStudio& studio) {
+    const auto& currentTechs = studio.get_training_techniques();
+    std::wstring curNames;
+    if (currentTechs.empty()) {
+        curNames = L"All Intermediate/Advanced Techniques (Default)";
+    } else {
+        for (size_t i = 0; i < currentTechs.size(); ++i) {
+            if (i > 0) curNames += L", ";
+            curNames += std::wstring(technique_name(currentTechs[i]).begin(), technique_name(currentTechs[i]).end());
+        }
+    }
+
+    std::wstring msg = L"HoDoKu Training & Practice Mode Configuration\n"
+                       L"================================================\n\n"
+                       L"Currently Targeted Techniques:\n"
+                       L"  [" + curNames + L"]\n\n"
+                       L"Choose which training category to practice:\n\n"
+                       L"[Yes] Focus on Single-Digit Patterns (Skyscrapers & 2-String Kites)\n"
+                       L"[No] Focus on Wings & Subsets (XY-Wing, XYZ-Wing, W-Wing, Pairs)\n"
+                       L"[Cancel] Close configuration";
+
+    int res = MessageBoxW(hwnd, msg.c_str(), L"Configure Practice & Training - HoDoKu", MB_YESNOCANCEL | MB_ICONQUESTION);
+    if (res == IDYES) {
+        studio.set_training_techniques({
+            TechniqueType::Skyscraper,
+            TechniqueType::TwoStringKite,
+            TechniqueType::TurbotFish
+        });
+        studio.set_game_mode(GameMode::Practicing);
+        studio.new_puzzle(1);
+        if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
+        InvalidateRect(hwnd, NULL, FALSE);
+        MessageBoxW(hwnd, L"Target set: Skyscrapers & 2-String Kites.\nGenerated new practice puzzle requiring these techniques!", L"Training Active - HoDoKu", MB_OK | MB_ICONINFORMATION);
+    } else if (res == IDNO) {
+        studio.set_training_techniques({
+            TechniqueType::XYWing,
+            TechniqueType::XYZWing,
+            TechniqueType::WWing,
+            TechniqueType::NakedPair,
+            TechniqueType::HiddenPair
+        });
+        studio.set_game_mode(GameMode::Practicing);
+        studio.new_puzzle(2);
+        if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
+        InvalidateRect(hwnd, NULL, FALSE);
+        MessageBoxW(hwnd, L"Target set: Wings & Subsets.\nGenerated new practice puzzle requiring these techniques!", L"Training Active - HoDoKu", MB_OK | MB_ICONINFORMATION);
+    }
+}
+
+inline void ShowPracticingDialog(HWND hParent, HoDoKuStudio& studio) {
+    int choice = MessageBoxW(hParent,
         L"Practicing Mode Active!\n\n"
         L"In this mode, newly generated puzzles will specifically target\n"
-        L"intermediate and advanced solving techniques (Subsets, Wings,\n"
-        L"Fish, Coloring, Chains, and Forcing Chains).\n\n"
-        L"Press Ctrl+N to generate a new practice puzzle.",
-        L"Practicing Mode - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        L"intermediate and advanced solving techniques.\n\n"
+        L"Would you like to configure target training techniques now?",
+        L"Practicing Mode - HoDoKu", MB_YESNO | MB_ICONQUESTION);
+    if (choice == IDYES) {
+        ShowTrainingConfigDialog(hParent, studio);
+    }
 }
 
 inline void DoExportPng(HWND hwnd, const HoDoKuStudio& studio) {

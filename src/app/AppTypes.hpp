@@ -130,6 +130,7 @@ enum MenuAndControlId {
     IDM_MODE_PLAYING = 9101,
     IDM_MODE_LEARNING = 9102,
     IDM_MODE_PRACTICING = 9103,
+    IDM_MODE_CONFIG_TRAINING = 9104,
 
     // Toolbar Controls
     IDC_BTN_UNDO = 3001,
