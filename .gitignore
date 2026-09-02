@@ -1,11 +1,33 @@
-﻿# Build artifacts
+# Build outputs and executables
 bin/
 *.exe
-*.o
 *.obj
-*.pdb
-*.ilk
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
 
-# IDE files
+# CMake / IDE build directories
+build/
+cmake-build-*/
+out/
+.vs/
 .vscode/
 .idea/
+
+# Windows system files
+[Dd]esktop.ini
+Thumbs.db
+*.pdb
+*.ilk
+*.idb
+
+# Log files
+*.log
+
+# Temporary and backup files
+*.tmp
+*.bak
+*~

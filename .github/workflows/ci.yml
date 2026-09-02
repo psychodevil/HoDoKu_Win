@@ -1,0 +1,35 @@
+name: C++20 CI Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Windows C++20 Build & Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MinGW-w64 GCC
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          version: 13.2.0
+          platform: x64
+
+      - name: Compile Core Test Suite
+        run: |
+          mkdir -p bin
+          g++ -std=c++20 -O3 -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
+
+      - name: Run Core Test Suite
+        run: |
+          ./bin/test_core.exe
+
+      - name: Compile Native HoDoKu GUI Application
+        run: |
+          g++ -std=c++20 -O3 -Wall -Wextra src/app/main.cpp -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
