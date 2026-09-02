@@ -240,6 +240,41 @@ public:
         return best_puzzle;
     }
 
+    BoardState generate_training_puzzle(const std::vector<TechniqueType>& target_techniques, SymmetryType symmetry = SymmetryType::Rotational180, int max_attempts = 30) {
+        if (target_techniques.empty()) {
+            return generate_puzzle(DifficultyLevel::Medium, symmetry, max_attempts);
+        }
+
+        for (int attempt = 0; attempt < max_attempts; ++attempt) {
+            BoardState full = generate_terminal_grid();
+            BoardState puzzle = dig_puzzle(full, symmetry);
+
+            BoardState sim = puzzle;
+            bool found_target = false;
+            while (sim.unfilled_count() > 0) {
+                auto step = StepFinder::find_next_step(sim);
+                if (!step) break;
+
+                for (auto t : target_techniques) {
+                    if (step->type == t) {
+                        found_target = true;
+                        break;
+                    }
+                }
+                if (found_target) break;
+
+                for (const auto& a : step->assignments) sim.set_value(a.cell, a.digit);
+                for (const auto& e : step->eliminations) sim.remove_candidate(e.cell, e.digit);
+            }
+
+            if (found_target) {
+                return puzzle;
+            }
+        }
+
+        return generate_puzzle(DifficultyLevel::Hard, symmetry, max_attempts);
+    }
+
 private:
     std::mt19937 m_rng;
 };

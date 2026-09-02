@@ -22,10 +22,14 @@ enum class TechniqueType {
     XWing,
     Swordfish,
     Jellyfish,
+    Skyscraper,
+    TwoStringKite,
+    TurbotFish,
     SimpleColoring,
     SimpleColors,
     XYWing,
     XYZWing,
+    WWing,
     WXYZWing,
     UniqueRectangle,
     AvoidableRectangle,
@@ -37,6 +41,43 @@ enum class TechniqueType {
     BruteForce,
     Custom
 };
+
+inline std::string technique_name(TechniqueType t) {
+    switch (t) {
+        case TechniqueType::FullHouse: return "Full House";
+        case TechniqueType::NakedSingle: return "Naked Single";
+        case TechniqueType::HiddenSingle: return "Hidden Single";
+        case TechniqueType::LockedCandidatesPointing: return "Locked Candidates (Pointing)";
+        case TechniqueType::LockedCandidatesClaiming: return "Locked Candidates (Claiming)";
+        case TechniqueType::NakedPair: return "Naked Pair";
+        case TechniqueType::HiddenPair: return "Hidden Pair";
+        case TechniqueType::NakedTriple: return "Naked Triple";
+        case TechniqueType::HiddenTriple: return "Hidden Triple";
+        case TechniqueType::NakedQuadruple: return "Naked Quadruple";
+        case TechniqueType::HiddenQuadruple: return "Hidden Quadruple";
+        case TechniqueType::XWing: return "X-Wing";
+        case TechniqueType::Swordfish: return "Swordfish";
+        case TechniqueType::Jellyfish: return "Jellyfish";
+        case TechniqueType::Skyscraper: return "Skyscraper";
+        case TechniqueType::TwoStringKite: return "2-String Kite";
+        case TechniqueType::TurbotFish: return "Turbot Fish";
+        case TechniqueType::SimpleColoring: return "Simple Coloring";
+        case TechniqueType::SimpleColors: return "Simple Colors";
+        case TechniqueType::XYWing: return "XY-Wing";
+        case TechniqueType::XYZWing: return "XYZ-Wing";
+        case TechniqueType::WWing: return "W-Wing";
+        case TechniqueType::WXYZWing: return "WXYZ-Wing";
+        case TechniqueType::UniqueRectangle: return "Unique Rectangle";
+        case TechniqueType::AvoidableRectangle: return "Avoidable Rectangle";
+        case TechniqueType::BUG: return "Bivalue Universal Grave +1";
+        case TechniqueType::RemotePair: return "Remote Pair";
+        case TechniqueType::AlsXz: return "Almost Locked Set XZ";
+        case TechniqueType::SueDeCoq: return "Sue de Coq";
+        case TechniqueType::DeathBlossom: return "Death Blossom";
+        case TechniqueType::BruteForce: return "Brute Force";
+        default: return "Custom Technique";
+    }
+}
 
 struct CandidateElimination {
     int cell{0};
