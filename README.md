@@ -149,3 +149,4 @@ ctest --test-dir build --output-on-failure
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** (GPL-3.0), consistent with the original HoDoKu codebase. See the [COPYING](COPYING) file for full details.
+
