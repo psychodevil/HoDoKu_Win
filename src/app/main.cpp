@@ -60,6 +60,12 @@ enum class HintLevel {
     Concrete
 };
 
+enum class GameMode {
+    Playing = 0,
+    Learning = 1,
+    Practicing = 2
+};
+
 // HoDoKu Color Palette for cell/candidate coloring (10 colors from Options.java)
 static const Color HODOKU_PALETTE[10] = {
     Color(255, 255, 192, 89),  // 0: Orange ('a')
@@ -115,6 +121,10 @@ enum MenuAndControlId {
 
     IDM_FILE_SET_GIVENS = 2020,
     IDM_OPTIONS_PREFERENCES = 9201,
+
+    IDM_MODE_PLAYING = 9101,
+    IDM_MODE_LEARNING = 9102,
+    IDM_MODE_PRACTICING = 9103,
 
     // Toolbar Controls
     IDC_BTN_UNDO = 3001,
@@ -835,6 +845,8 @@ public:
     bool is_bivalue_filter() const { return m_filterBivalue; }
     std::optional<Step> get_selected_step() const { return m_selectedStep; }
     HintLevel get_hint_level() const { return m_hintLevel; }
+    GameMode get_game_mode() const { return m_gameMode; }
+    void set_game_mode(GameMode mode) { m_gameMode = mode; }
 
     int get_cell_color(int cell) const {
         return (cell >= 0 && cell < TOTAL_CELLS) ? m_cellColors[cell] : 0;
@@ -849,6 +861,7 @@ private:
     BoardState m_initialBoard;
     DlxSolver m_solver;
     SudokuGenerator m_generator;
+    GameMode m_gameMode{GameMode::Playing};
 
     std::vector<StudioSnapshot> m_undoStack;
     std::vector<StudioSnapshot> m_redoStack;
@@ -1442,10 +1455,35 @@ void UpdateHintBoxText() {
         EnableWindow(g_hHintExecBtn, TRUE);
         EnableWindow(g_hHintCancelBtn, TRUE);
     } else {
+        if (g_studio->get_game_mode() == GameMode::Learning) {
+            auto next = StepFinder::find_next_step(g_studio->get_board());
+            if (next) {
+                std::string tutorMsg = "Tutor Guidance [Learning Mode]:\r\n"
+                                       "Recommended next step is '" + next->name + "' (" +
+                                       std::string(difficulty_name(next->difficulty)) +
+                                       ", score: " + std::to_string(next->score) + ").\r\n\r\n" +
+                                       next->explanation;
+                std::wstring wmsg(tutorMsg.begin(), tutorMsg.end());
+                SetWindowTextW(g_hHintEdit, wmsg.c_str());
+                EnableWindow(g_hHintExecBtn, FALSE);
+                EnableWindow(g_hHintCancelBtn, FALSE);
+                return;
+            }
+        }
         SetWindowTextW(g_hHintEdit, L"Press [Next Hint (F12)] or [Vague Hint (Alt+F12)] to find logical deduction steps, or [Solve DLX] for instant solution.");
         EnableWindow(g_hHintExecBtn, FALSE);
         EnableWindow(g_hHintCancelBtn, FALSE);
     }
+}
+
+void ShowPracticingDialog(HWND hParent) {
+    MessageBoxW(hParent,
+        L"Practicing Mode Active!\n\n"
+        L"In this mode, newly generated puzzles will specifically target\n"
+        L"intermediate and advanced solving techniques (Subsets, Wings,\n"
+        L"Fish, Coloring, Chains, and Forcing Chains).\n\n"
+        L"Press Ctrl+N to generate a new practice puzzle.",
+        L"Practicing Mode - HoDoKu", MB_OK | MB_ICONINFORMATION);
 }
 
 void UpdateStatusBarText() {
@@ -1465,8 +1503,15 @@ void UpdateStatusBarText() {
     int freeCells = g_studio->get_unfilled_count();
     int progress = static_cast<int>((81 - freeCells) * 100.0f / 81.0f);
 
+    std::wstring modeStr = L"Playing";
+    if (g_studio->get_game_mode() == GameMode::Learning) {
+        modeStr = L"Learning (Tutor Active)";
+    } else if (g_studio->get_game_mode() == GameMode::Practicing) {
+        modeStr = L"Practicing (Training Active)";
+    }
+
     std::wstring part1 = L" [Colors: 1-9, R=Clear]  |  Level: " + lvlName + L"  |  Score: " + std::to_wstring(score) + L"  |  Givens: " + std::to_wstring(givens);
-    std::wstring part2 = L" Progress: " + std::to_wstring(progress) + L"% (" + std::to_wstring(freeCells) + L" free)  |  Mode: Playing";
+    std::wstring part2 = L" Progress: " + std::to_wstring(progress) + L"% (" + std::to_wstring(freeCells) + L" free)  |  Mode: " + modeStr;
 
     SendMessageW(g_hStatusBar, SB_SETTEXT, 0, (LPARAM)part1.c_str());
     SendMessageW(g_hStatusBar, SB_SETTEXT, 1, (LPARAM)part2.c_str());
@@ -1806,12 +1851,43 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     bool isAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-    // 1. Function Keys (F1..F12)
-    if (wParam >= VK_F1 && wParam <= VK_F9) {
-        int d = static_cast<int>(wParam - VK_F1 + 1);
-        g_studio->toggle_filter_digit(d);
-        for (HWND b : g_toolbarButtons) InvalidateRect(b, NULL, TRUE);
+    // 1. Function Keys (F2..F4 Game Modes, F5..F8 Tabs, F11 Singles, F12 Hints)
+    if (wParam == VK_F2) {
+        g_studio->set_game_mode(GameMode::Playing);
+        UpdateStatusBarText();
+        UpdateHintBoxText();
         InvalidateRect(g_hwnd, NULL, FALSE);
+        return true;
+    }
+    if (wParam == VK_F3) {
+        g_studio->set_game_mode(GameMode::Learning);
+        UpdateStatusBarText();
+        UpdateHintBoxText();
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return true;
+    }
+    if (wParam == VK_F4) {
+        g_studio->set_game_mode(GameMode::Practicing);
+        UpdateStatusBarText();
+        UpdateHintBoxText();
+        ShowPracticingDialog(g_hwnd);
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return true;
+    }
+    if (wParam == VK_F5) {
+        SwitchTab(TabView::ActiveCell);
+        return true;
+    }
+    if (wParam == VK_F6) {
+        SwitchTab(TabView::Summary);
+        return true;
+    }
+    if (wParam == VK_F7) {
+        SwitchTab(TabView::SolutionPath);
+        return true;
+    }
+    if (wParam == VK_F8) {
+        SwitchTab(TabView::AllSteps);
         return true;
     }
     if (wParam == VK_F11) {
@@ -1832,22 +1908,6 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         }
         UpdateHintBoxText();
         InvalidateRect(g_hwnd, NULL, FALSE);
-        return true;
-    }
-    if (wParam == VK_F5) {
-        SwitchTab(TabView::ActiveCell);
-        return true;
-    }
-    if (wParam == VK_F6) {
-        SwitchTab(TabView::Summary);
-        return true;
-    }
-    if (wParam == VK_F7) {
-        SwitchTab(TabView::SolutionPath);
-        return true;
-    }
-    if (wParam == VK_F8) {
-        SwitchTab(TabView::AllSteps);
         return true;
     }
 
@@ -2465,6 +2525,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowSetGivensDialog(hwnd);
         } else if (id == 9201 || id == IDM_OPTIONS_PREFERENCES) {
             ShowPreferencesDialog(hwnd);
+        } else if (id == IDM_MODE_PLAYING || id == 9101) {
+            g_studio->set_game_mode(GameMode::Playing);
+            UpdateStatusBarText();
+            UpdateHintBoxText();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_LEARNING || id == 9102) {
+            g_studio->set_game_mode(GameMode::Learning);
+            UpdateStatusBarText();
+            UpdateHintBoxText();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_PRACTICING || id == 9103) {
+            g_studio->set_game_mode(GameMode::Practicing);
+            UpdateStatusBarText();
+            UpdateHintBoxText();
+            ShowPracticingDialog(hwnd);
+            InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_FILE_COPY_GIVENS) {
             SetClipboardText(g_studio->export_givens_string());
         } else if (id == IDM_FILE_COPY_PM) {
