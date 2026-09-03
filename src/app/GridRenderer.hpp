@@ -88,93 +88,92 @@ public:
     void render_grid_canvas(Graphics& g, const HoDoKuStudio& studio, int x, int y, int width, int height) {
         update_layout(x, y, width, height);
 
-        // Background
-        SolidBrush bgCanvas(Color(255, 255, 255, 255));
+        // 1. Background fill
+        SolidBrush bgCanvas(Color(255, 255, 255, 255)); // HoDoKu DEFAULT_CELL_COLOR = Color.WHITE
         g.FillRectangle(&bgCanvas, m_offsetX, m_offsetY, m_gridSize, m_gridSize);
 
-        // Cell Background Highlights
-        SolidBrush primHintBrush(Color(255, 255, 242, 117));     // HoDoKu Yellow Hint (#fff275)
-        SolidBrush secHintBrush(Color(255, 255, 211, 182));      // HoDoKu Peach Secondary (#ffd3b6)
-        SolidBrush filterHitBrush(Color(255, 185, 255, 185));    // HoDoKu POSSIBLE_CELL_COLOR from Options.java (#b9ffb9)
-        SolidBrush invalidCellBrush(Color(255, 255, 185, 185));  // HoDoKu INVALID_CELL_COLOR from Options.java (#ffb9b9)
-        SolidBrush bivalueHitBrush(Color(255, 220, 252, 231));   // Bi-value Green
-
-        StringFormat centerFmt;
-        centerFmt.SetAlignment(StringAlignmentCenter);
-        centerFmt.SetLineAlignment(StringAlignmentCenter);
+        // HoDoKu Official Color Palette from Options.java
+        SolidBrush aktCellBrush(Color(255, 255, 255, 150));     // HoDoKu AKT_CELL_COLOR = new Color(255, 255, 150)
+        SolidBrush possibleCellBrush(Color(255, 185, 255, 185)); // HoDoKu POSSIBLE_CELL_COLOR = new Color(185, 255, 185)
+        SolidBrush invalidCellBrush(Color(255, 255, 185, 185));  // HoDoKu INVALID_CELL_COLOR = new Color(255, 185, 185)
 
         const auto& board = studio.get_board();
         auto activeStep = studio.get_hovered_step() ? studio.get_hovered_step() : studio.get_selected_step();
         bool showStepOverlays = (studio.get_hint_level() == HintLevel::Concrete && studio.get_selected_step()) || studio.get_hovered_step().has_value();
 
-        int hoveredCell = studio.get_hovered_cell();
-        int hoveredCand = studio.get_hovered_candidate();
         int selectedCell = studio.get_selected_cell();
         int activeFilter = studio.get_active_filter();
         bool filterBivalue = studio.is_bivalue_filter();
         bool filterExcluded = studio.is_filter_excluded_mode();
         BitSet81 conflictCells = board.get_invalid_conflict_cells();
 
-        // Crosshair Guide (Subtle Row, Column, Box alignment guides)
-        if (hoveredCell >= 0 && hoveredCell < TOTAL_CELLS) {
-            int hr = cell_row(hoveredCell);
-            int hc = cell_col(hoveredCell);
-            int hb = cell_box(hoveredCell);
-            SolidBrush crosshairBrush(Color(20, 59, 130, 246)); // 8% alpha cool blue
-            for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
-                if (cell != hoveredCell && (cell_row(cell) == hr || cell_col(cell) == hc || cell_box(cell) == hb)) {
-                    int r = cell_row(cell);
-                    int c = cell_col(cell);
-                    float cx = m_offsetX + c * m_cellSize;
-                    float cy = m_offsetY + r * m_cellSize;
-                    g.FillRectangle(&crosshairBrush, cx, cy, m_cellSize, m_cellSize);
-                }
-            }
-        }
-
-        // Cell Background Highlights
+        // 2. Cell Background Highlights (Exact HoDoKu priority order from SudokuPanel.java lines 2160-2220)
         for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
             int r = cell_row(cell);
             int c = cell_col(cell);
             float cx = m_offsetX + c * m_cellSize;
             float cy = m_offsetY + r * m_cellSize;
 
-            // 1. User cell custom color from palette (if set)
-            int userCol = studio.get_cell_color(cell);
-            if (userCol >= 0 && userCol < 10) {
-                SolidBrush uBrush(HODOKU_PALETTE[userCol]);
-                g.FillRectangle(&uBrush, cx, cy, m_cellSize, m_cellSize);
+            bool isSelected = (cell == selectedCell);
+            Brush* cellBrush = nullptr;
+
+            // Priority 1: Default selected cell background
+            if (isSelected) {
+                cellBrush = &aktCellBrush;
             }
 
-            // 2. Overlays
-            if (showStepOverlays && activeStep && activeStep->primary_cells.test(cell)) {
-                g.FillRectangle(&primHintBrush, cx, cy, m_cellSize, m_cellSize);
-            } else if (showStepOverlays && activeStep && activeStep->secondary_cells.test(cell)) {
-                g.FillRectangle(&secHintBrush, cx, cy, m_cellSize, m_cellSize);
-            } else if (activeFilter > 0) {
-                bool hasDigit = (board.get_value(cell) == activeFilter || board.has_candidate(cell, activeFilter));
-                if (!filterExcluded && hasDigit) {
-                    // Green mode: highlight cells that contain the candidate
-                    g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
-                } else if (filterExcluded && !hasDigit && board.is_unfilled(cell)) {
-                    // Red mode: highlight cells where the candidate is excluded/invalid
-                    g.FillRectangle(&invalidCellBrush, cx, cy, m_cellSize, m_cellSize);
-                } else if (filterExcluded && hasDigit) {
-                    g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
+            // Priority 2: Filter mode (Possible vs Excluded)
+            if (activeFilter > 0) {
+                bool candidateValid = board.has_candidate(cell, activeFilter);
+                if (!filterExcluded) {
+                    // Green mode: ONLY unfilled cells with the candidate are highlighted green (SudokuPanel.java line 2197)
+                    if (board.is_unfilled(cell) && candidateValid) {
+                        cellBrush = &possibleCellBrush;
+                    }
+                } else {
+                    // Red mode: unfilled cells where candidate is excluded, or cells with conflicts (SudokuPanel.java line 2192)
+                    if (board.is_unfilled(cell) && !candidateValid) {
+                        cellBrush = &invalidCellBrush;
+                    } else if (conflictCells.test(cell)) {
+                        cellBrush = &invalidCellBrush;
+                    }
                 }
-            } else if (filterBivalue && board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
-                g.FillRectangle(&bivalueHitBrush, cx, cy, m_cellSize, m_cellSize);
+            } else if (filterBivalue) {
+                if (board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
+                    cellBrush = &possibleCellBrush;
+                }
             } else if (filterExcluded && conflictCells.test(cell)) {
-                // Red mode with no filter: highlight all duplicate conflicts
-                g.FillRectangle(&invalidCellBrush, cx, cy, m_cellSize, m_cellSize);
-            } else if (cell == hoveredCell && cell != selectedCell) {
-                SolidBrush hoverCellBrush(Color(50, 59, 130, 246)); // Soft blue hover
-                g.FillRectangle(&hoverCellBrush, cx, cy, m_cellSize, m_cellSize);
+                // Red mode with no active filter: highlight conflicting cells
+                cellBrush = &invalidCellBrush;
+            }
+
+            // Priority 3: Custom user palette coloring (1..9)
+            int userCol = studio.get_cell_color(cell);
+            SolidBrush uBrush(Color(255, 255, 255, 255));
+            if (userCol > 0 && userCol < 10) {
+                uBrush.SetColor(HODOKU_PALETTE[userCol]);
+                cellBrush = &uBrush;
+            }
+
+            // Fill cell if colored
+            if (cellBrush != nullptr) {
+                g.FillRectangle(cellBrush, cx, cy, m_cellSize, m_cellSize);
+            }
+
+            // If selected cell has a background other than aktCellColor, draw HoDoKu cursor frame (SudokuPanel.java line 2208-2220)
+            if (isSelected && cellBrush != &aktCellBrush) {
+                float frameSize = m_cellSize * 0.08f; // CURSOR_FRAME_SIZE = 0.08 from Options.java
+                g.FillRectangle(&aktCellBrush, cx, cy, m_cellSize, frameSize);
+                g.FillRectangle(&aktCellBrush, cx, cy, frameSize, m_cellSize);
+                g.FillRectangle(&aktCellBrush, cx + m_cellSize - frameSize, cy, frameSize, m_cellSize);
+                g.FillRectangle(&aktCellBrush, cx, cy + m_cellSize - frameSize, m_cellSize, frameSize);
+                Pen aktBdr(Color(255, 205, 195, 75), 1.0f);
+                g.DrawRectangle(&aktBdr, cx + 0.5f, cy + 0.5f, m_cellSize - 1.0f, m_cellSize - 1.0f);
             }
         }
 
-        // Grid Lines
-        Pen thinLine(Color(255, 190, 195, 200), 1.0f);
+        // 3. Grid Lines (HoDoKu INNER_GRID_COLOR = LIGHT_GRAY, GRID_COLOR = BLACK)
+        Pen thinLine(Color(255, 200, 200, 200), 1.0f);
         Pen thickLine(Color(255, 0, 0, 0), 2.5f);
 
         for (int i = 0; i <= 9; ++i) {
@@ -191,36 +190,31 @@ public:
             g.DrawLine(&thickLine, static_cast<float>(m_offsetX), m_offsetY + pos, static_cast<float>(m_offsetX + m_gridSize), m_offsetY + pos);
         }
 
-        // Focus Cursor Accent Border (Exact Yellow outline from screenshot)
-        if (selectedCell >= 0) {
-            int r = cell_row(selectedCell);
-            int c = cell_col(selectedCell);
-            Pen cursorPen(Color(255, 234, 179, 8), 2.5f); // Gold/Yellow border
-            g.DrawRectangle(&cursorPen, m_offsetX + c * m_cellSize + 1.0f, m_offsetY + r * m_cellSize + 1.0f, m_cellSize - 2.0f, m_cellSize - 2.0f);
-        }
-
-        // Hovered Cell Accent Border
-        if (hoveredCell >= 0 && hoveredCell != selectedCell) {
-            int r = cell_row(hoveredCell);
-            int c = cell_col(hoveredCell);
-            Pen hoverPen(Color(180, 59, 130, 246), 1.8f); // Soft blue border
-            g.DrawRectangle(&hoverPen, m_offsetX + c * m_cellSize + 1.0f, m_offsetY + r * m_cellSize + 1.0f, m_cellSize - 2.0f, m_cellSize - 2.0f);
-        }
-
-        // Digits & Candidates
+        // 4. Digits & Candidates (Fonts and Brushes from Options.java)
         FontFamily ff(L"Segoe UI");
         Font digitFont(&ff, m_cellSize * 0.58f, FontStyleBold, UnitPixel);
         Font candFont(&ff, m_cellSize * 0.22f, FontStyleRegular, UnitPixel);
         Font candBoldFont(&ff, m_cellSize * 0.22f, FontStyleBold, UnitPixel);
 
-        SolidBrush givenBrush(Color(255, 0, 0, 0));             // Black Given
-        SolidBrush userBrush(Color(255, 0, 34, 204));           // Bold Blue User Value (#0022cc)
-        SolidBrush candNormalBrush(Color(255, 35, 35, 35));     // Crisp Dark Candidate
-        SolidBrush candHighlightBrush(Color(255, 0, 0, 0));     // Filtered Candidate
-        SolidBrush candElimBrush(Color(255, 220, 38, 38));      // Red Eliminated
+        SolidBrush givenBrush(Color(255, 0, 0, 0));             // CELL_FIXED_VALUE_COLOR = Color.BLACK
+        SolidBrush userBrush(Color(255, 0, 34, 204));           // CELL_VALUE_COLOR = Color.BLUE (#0022cc)
+        SolidBrush wrongBrush(Color(255, 235, 0, 0));           // WRONG_VALUE_COLOR = Color.RED
+        SolidBrush candNormalBrush(Color(255, 100, 100, 100));  // CANDIDATE_COLOR = new Color(100, 100, 100)
+        SolidBrush candHighlightBrush(Color(255, 0, 0, 0));     // Active/Key Candidate Color = Color.BLACK
+
+        // Hint candidate background colors from Options.java lines 366-370
+        SolidBrush hintCandBackBrush(Color(255, 63, 218, 101));       // HINT_CANDIDATE_BACK_COLOR = new Color(63, 218, 101)
+        SolidBrush hintDeleteBackBrush(Color(255, 255, 118, 132));    // HINT_CANDIDATE_DELETE_BACK_COLOR = new Color(255, 118, 132)
+        SolidBrush hintFinBackBrush(Color(255, 127, 187, 255));       // HINT_CANDIDATE_FIN_BACK_COLOR = new Color(127, 187, 255)
+        SolidBrush hintAlsBackBrush(Color(255, 197, 232, 140));       // HINT_CANDIDATE_ALS_BACK_COLORS[0] = new Color(197, 232, 140)
         Pen elimStrikePen(Color(255, 220, 38, 38), 1.5f);
 
+        StringFormat centerFmt;
+        centerFmt.SetAlignment(StringAlignmentCenter);
+        centerFmt.SetLineAlignment(StringAlignmentCenter);
+
         float subCell = m_cellSize / 3.0f;
+        float candHeight = subCell * 0.88f;
 
         for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
             int r = cell_row(cell);
@@ -236,7 +230,9 @@ public:
                 } else {
                     RectF cellRect(cx, cy, m_cellSize, m_cellSize);
                     std::wstring text = std::to_wstring(val);
-                    Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush) : static_cast<Brush*>(&userBrush);
+                    Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush)
+                             : conflictCells.test(cell) ? static_cast<Brush*>(&wrongBrush)
+                             : static_cast<Brush*>(&userBrush);
                     g.DrawString(text.c_str(), -1, &digitFont, cellRect, &centerFmt, b);
                 }
             } else {
@@ -251,6 +247,7 @@ public:
 
                         bool isElim = false;
                         bool isAssign = false;
+                        bool isFin = false;
                         if (showStepOverlays && activeStep) {
                             for (const auto& elim : activeStep->eliminations) {
                                 if (elim.cell == cell && elim.digit == d) {
@@ -266,46 +263,35 @@ public:
                             }
                         }
 
-                        bool isHoveredCand = (cell == hoveredCell && d == hoveredCand);
-
                         if (studio.is_colorku_mode()) {
                             float beadRadius = subCell * 0.32f;
-                            if (isHoveredCand) {
-                                SolidBrush hoverRing(Color(180, 59, 130, 246));
-                                g.FillEllipse(&hoverRing, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                            }
                             draw_colorku_marble(g, kx + subCell * 0.5f, ky + subCell * 0.5f, beadRadius, d);
                             if (isElim) {
                                 g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
                                 g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
                             }
                         } else {
-                            // Candidate-level custom coloring background
-                            int candCol = studio.get_candidate_color(cell, d);
-                            if (candCol > 0 && candCol < 10) {
-                                SolidBrush candBg(HODOKU_PALETTE[candCol]);
-                                g.FillRectangle(&candBg, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                            }
-
-                            if (isHoveredCand) {
-                                SolidBrush candHoverPill(Color(200, 59, 130, 246));
-                                g.FillEllipse(&candHoverPill, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            // Candidate background highlighting (HoDoKu fillOval under candidate digit)
+                            float ovalOffset = (subCell - candHeight) / 2.0f;
+                            if (isElim) {
+                                g.FillEllipse(&hintDeleteBackBrush, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
                             } else if (isAssign) {
-                                SolidBrush assignGlow(Color(180, 187, 247, 208));
-                                g.FillEllipse(&assignGlow, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
-                                Pen assignBdr(Color(255, 34, 197, 94), 1.2f);
-                                g.DrawEllipse(&assignBdr, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                                g.FillEllipse(&hintCandBackBrush, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
+                            } else if (isFin) {
+                                g.FillEllipse(&hintFinBackBrush, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
+                            } else {
+                                int candCol = studio.get_candidate_color(cell, d);
+                                if (candCol > 0 && candCol < 10) {
+                                    SolidBrush cBg(HODOKU_PALETTE[candCol]);
+                                    g.FillEllipse(&cBg, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
+                                }
                             }
 
                             bool isFilterMatch = (activeFilter == d);
-                            SolidBrush candHoverTextBrush(Color(255, 255, 255, 255));
-                            Brush* cBrush = isElim ? static_cast<Brush*>(&candElimBrush)
-                                          : isHoveredCand ? static_cast<Brush*>(&candHoverTextBrush)
-                                          : isFilterMatch ? static_cast<Brush*>(&candHighlightBrush)
-                                          : isAssign ? static_cast<Brush*>(&candHighlightBrush)
-                                          : static_cast<Brush*>(&candNormalBrush);
+                            Brush* cBrush = (isElim || isAssign || isFilterMatch) ? static_cast<Brush*>(&candHighlightBrush)
+                                                                                  : static_cast<Brush*>(&candNormalBrush);
+                            Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
 
-                            Font* f = (isFilterMatch || isAssign || isHoveredCand) ? &candBoldFont : &candFont;
                             std::wstring candStr = std::to_wstring(d);
                             g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
 
@@ -319,7 +305,7 @@ public:
             }
         }
 
-        // Render Graphical Step Link Overlays (Strong & Weak Chain Links)
+        // 5. Chain Links (HoDoKu ARROW_COLOR = Color.RED / Green for strong)
         if (showStepOverlays && activeStep && !activeStep->links.empty()) {
             AdjustableArrowCap arrowCap(3.5f, 3.5f, true);
 
