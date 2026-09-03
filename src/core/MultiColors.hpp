@@ -93,7 +93,6 @@ public:
                 setA.for_each_cell([&](int u) {
                     if (conflict) return;
                     if ((setB & GRID.peer_bitsets[u]).any()) {
-                        conflict = true;
                     }
                 });
                 return conflict;
@@ -164,7 +163,6 @@ public:
                                 oppB.for_each_cell([&](int v) { seenB |= GRID.peer_bitsets[v]; });
 
                                 BitSet81 elimCandidates = seenA & seenB;
-                                elimCandidates &= ~clusters[i].mask0;
                                 elimCandidates &= ~clusters[i].mask1;
                                 elimCandidates &= ~clusters[j].mask0;
                                 elimCandidates &= ~clusters[j].mask1;

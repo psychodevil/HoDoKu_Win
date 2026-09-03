@@ -21,7 +21,7 @@ public:
                 if (cands1.count() < 2 || cands1.count() > 5) continue;
 
                 for (int b = 18; b < 27; ++b) {
-                    // Box must NOT intersect line1 (disjoint base houses)
+                    // Base houses must be disjoint
                     if (GRID.house_bitsets[line1].intersects(GRID.house_bitsets[b])) {
                         continue;
                     }
