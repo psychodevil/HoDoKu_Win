@@ -247,31 +247,48 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         }
     }
 
-    // 3. Arrow Keys Navigation
+    // 3. Arrow Keys Navigation & Range Selection
     if (!isCtrl && !isAlt) {
-        if (wParam == VK_UP) {
-            g_studio->move_selection(-1, 0);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_DOWN) {
-            g_studio->move_selection(1, 0);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_LEFT) {
-            g_studio->move_selection(0, -1);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_RIGHT) {
-            g_studio->move_selection(0, 1);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
+        if (isShift) {
+            // Shift + Arrow: Expand selection region (SudokuPanel.java lines 1187, 1222, 1257, 1292)
+            if (wParam == VK_UP || wParam == VK_DOWN || wParam == VK_LEFT || wParam == VK_RIGHT) {
+                int dr = (wParam == VK_DOWN) ? 1 : (wParam == VK_UP) ? -1 : 0;
+                int dc = (wParam == VK_RIGHT) ? 1 : (wParam == VK_LEFT) ? -1 : 0;
+                g_studio->extend_selection_region(dr, dc);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
+        } else {
+            if (wParam == VK_UP) {
+                g_studio->move_selection(-1, 0);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
+            if (wParam == VK_DOWN) {
+                g_studio->move_selection(1, 0);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
+            if (wParam == VK_LEFT) {
+                g_studio->move_selection(0, -1);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
+            if (wParam == VK_RIGHT) {
+                g_studio->move_selection(0, 1);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
         }
         if (wParam == VK_HOME) {
             g_studio->move_to_home(false);
@@ -436,18 +453,38 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         int cell = g_renderer.hit_test_grid(x, y);
         if (cell >= 0 && g_studio) {
             SetFocus(hwnd);
-            int candDigit = g_renderer.hit_test_candidate(x, y, cell);
+            bool isCtrl = (wParam & MK_CONTROL) != 0;
+            bool isShift = (wParam & MK_SHIFT) != 0;
 
-            if (g_studio->get_active_candidate_color() >= 0 && candDigit > 0) {
-                // Apply candidate color
-                g_studio->set_candidate_color(cell, candDigit, g_studio->get_active_candidate_color());
-            } else if (candDigit > 0 && g_studio->get_board().is_unfilled(cell) &&
-                       g_studio->get_board().has_candidate(cell, candDigit)) {
-                // Clicking candidate pencilmark directly sets cell value
-                g_studio->set_cell_digit(cell, candDigit);
+            if (isCtrl) {
+                // Ctrl + Click: toggle cell in multi-selection (SudokuPanel.java lines 872-891)
+                if (g_studio->get_selected_cells().empty()) {
+                    g_studio->add_to_selection(g_studio->get_selected_cell());
+                    g_studio->add_to_selection(cell);
+                } else {
+                    g_studio->toggle_in_selection(cell);
+                }
                 g_studio->set_selected_cell(cell);
+            } else if (isShift) {
+                // Shift + Click: rectangular region selection (SudokuPanel.java lines 892-895)
+                int anchor = g_studio->get_selected_cell();
+                g_studio->select_region(cell_row(anchor), cell_col(anchor), cell_row(cell), cell_col(cell));
             } else {
-                g_studio->set_selected_cell(cell);
+                // Normal Click: clear multi-selection
+                g_studio->clear_multi_selection();
+
+                int candDigit = g_renderer.hit_test_candidate(x, y, cell);
+                if (g_studio->get_active_candidate_color() >= 0 && candDigit > 0) {
+                    // Apply candidate color
+                    g_studio->set_candidate_color(cell, candDigit, g_studio->get_active_candidate_color());
+                } else if (candDigit > 0 && g_studio->get_board().is_unfilled(cell) &&
+                           g_studio->get_board().has_candidate(cell, candDigit)) {
+                    // Clicking candidate pencilmark directly sets cell value
+                    g_studio->set_cell_digit(cell, candDigit);
+                    g_studio->set_selected_cell(cell);
+                } else {
+                    g_studio->set_selected_cell(cell);
+                }
             }
 
             if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);

@@ -415,19 +415,112 @@ public:
         }
     }
 
+    const BitSet81& get_selected_cells() const { return m_selectedCells; }
+    bool is_cell_selected(int cell) const {
+        if (m_selectedCells.empty()) return cell == m_selectedCell;
+        return m_selectedCells.test(cell);
+    }
+    void clear_multi_selection() {
+        m_selectedCells.clear();
+        m_anchorCell = -1;
+    }
+    void add_to_selection(int cell) {
+        if (cell >= 0 && cell < TOTAL_CELLS) m_selectedCells.set(cell);
+    }
+    void remove_from_selection(int cell) {
+        if (cell >= 0 && cell < TOTAL_CELLS) m_selectedCells.reset(cell);
+    }
+    void toggle_in_selection(int cell) {
+        if (cell >= 0 && cell < TOTAL_CELLS) {
+            if (m_selectedCells.test(cell)) m_selectedCells.reset(cell);
+            else m_selectedCells.set(cell);
+        }
+    }
+    void select_region(int r1, int c1, int r2, int c2) {
+        m_selectedCells.clear();
+        int rStart = std::min(r1, r2);
+        int rEnd   = std::max(r1, r2);
+        int cStart = std::min(c1, c2);
+        int cEnd   = std::max(c1, c2);
+        for (int r = rStart; r <= rEnd; ++r) {
+            for (int c = cStart; c <= cEnd; ++c) {
+                m_selectedCells.set(cell_index(r, c));
+            }
+        }
+    }
+    void extend_selection_region(int dr, int dc) {
+        if (m_anchorCell == -1) {
+            m_anchorCell = m_selectedCell;
+        }
+        int r = cell_row(m_selectedCell);
+        int c = cell_col(m_selectedCell);
+        r = std::clamp(r + dr, 0, 8);
+        c = std::clamp(c + dc, 0, 8);
+        m_selectedCell = cell_index(r, c);
+        select_region(cell_row(m_anchorCell), cell_col(m_anchorCell), r, c);
+    }
+
     void set_digit_at_selected(int digit) {
-        set_cell_digit(m_selectedCell, digit);
+        if (!m_selectedCells.empty()) {
+            push_undo();
+            m_selectedCells.for_each_cell([&](int cell) {
+                if (digit == 0) {
+                    if (!m_initialBoard.get_givens().test(cell)) {
+                        m_board.set_value(cell, 0);
+                    }
+                } else {
+                    if (!m_initialBoard.get_givens().test(cell)) {
+                        m_board.set_value(cell, digit);
+                    }
+                }
+            });
+            m_selectedStep.reset();
+            m_hintLevel = HintLevel::None;
+            recalculate_solution_path();
+            recalculate_fas();
+        } else {
+            set_cell_digit(m_selectedCell, digit);
+        }
     }
 
     void toggle_candidate_at_selected(int digit) {
-        toggle_cell_candidate(m_selectedCell, digit);
+        if (!m_selectedCells.empty()) {
+            push_undo();
+            m_selectedCells.for_each_cell([&](int cell) {
+                if (m_board.is_unfilled(cell) && !m_initialBoard.get_givens().test(cell)) {
+                    if (m_board.has_candidate(cell, digit)) {
+                        m_board.remove_candidate(cell, digit);
+                    } else {
+                        m_board.add_candidate(cell, digit);
+                    }
+                }
+            });
+            m_selectedStep.reset();
+            m_hintLevel = HintLevel::None;
+            recalculate_solution_path();
+            recalculate_fas();
+        } else {
+            toggle_cell_candidate(m_selectedCell, digit);
+        }
     }
 
     void set_selected_cell_color(int colorIdx) {
-        set_cell_color(m_selectedCell, colorIdx);
+        if (!m_selectedCells.empty()) {
+            push_undo();
+            m_selectedCells.for_each_cell([&](int cell) {
+                if (colorIdx == 0 || m_cellColors[cell] == static_cast<uint8_t>(colorIdx)) {
+                    m_cellColors[cell] = 0;
+                } else {
+                    m_cellColors[cell] = static_cast<uint8_t>(colorIdx);
+                }
+            });
+        } else {
+            set_cell_color(m_selectedCell, colorIdx);
+        }
     }
 
     void move_selection(int dr, int dc) {
+        clear_multi_selection();
         if (m_selectedCell == -1) {
             m_selectedCell = 0;
             return;
@@ -651,6 +744,8 @@ private:
     HintLevel m_hintLevel{HintLevel::None};
 
     int m_selectedCell{0};
+    BitSet81 m_selectedCells;
+    int m_anchorCell{-1};
     int m_hoveredCell{-1};
     int m_hoveredCandidate{0};
     std::optional<Step> m_hoveredStep;

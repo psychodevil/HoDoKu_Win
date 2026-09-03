@@ -338,7 +338,12 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     int hCell = studio.get_hovered_cell();
     int hCand = studio.get_hovered_candidate();
 
-    if (hCell >= 0 && hCell < TOTAL_CELLS) {
+    if (!studio.get_selected_cells().empty() && hCell < 0) {
+        int count = studio.get_selected_cells().count();
+        int actR = cell_row(studio.get_selected_cell()) + 1;
+        int actC = cell_col(studio.get_selected_cell()) + 1;
+        part1 = L" Multi-Selection: " + std::to_wstring(count) + L" cells selected  |  Anchor: r" + std::to_wstring(actR) + L"c" + std::to_wstring(actC);
+    } else if (hCell >= 0 && hCell < TOTAL_CELLS) {
         int r = cell_row(hCell) + 1;
         int c = cell_col(hCell) + 1;
         const auto& board = studio.get_board();

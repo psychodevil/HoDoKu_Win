@@ -114,7 +114,7 @@ public:
             float cx = m_offsetX + c * m_cellSize;
             float cy = m_offsetY + r * m_cellSize;
 
-            bool isSelected = (cell == selectedCell);
+            bool isSelected = studio.is_cell_selected(cell);
             Brush* cellBrush = nullptr;
 
             // Priority 1: Default selected cell background
@@ -169,6 +169,10 @@ public:
                 g.FillRectangle(&aktCellBrush, cx, cy + m_cellSize - frameSize, m_cellSize, frameSize);
                 Pen aktBdr(Color(255, 205, 195, 75), 1.0f);
                 g.DrawRectangle(&aktBdr, cx + 0.5f, cy + 0.5f, m_cellSize - 1.0f, m_cellSize - 1.0f);
+            } else if (cell == selectedCell && !studio.get_selected_cells().empty()) {
+                // In multi-selection, emphasize the primary active anchor cell
+                Pen anchorBdr(Color(255, 205, 195, 75), 1.5f);
+                g.DrawRectangle(&anchorBdr, cx + 0.5f, cy + 0.5f, m_cellSize - 1.0f, m_cellSize - 1.0f);
             }
         }
 
