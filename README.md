@@ -97,12 +97,48 @@ HoDoKu_Win/
 
 ```powershell
 # Build and run the test suite
-g++ -std=c++20 -O3 -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
+### ColorKu 3D Marble Rendering Mode
+- **Specular 3D Spheres:** Switch from standard numeric pencilmarks to ColorKu marble beads with realistic radial lighting, specular highlight glints, and drop shadows (`Ctrl+Shift+C` or View menu).
+- **Custom Palette:** 9 distinct marble colors (Red, Orange, Yellow, Dark Green, Sky Blue, Royal Blue, Violet, Magenta, Pearl White).
+
+### Headless CLI & High-Performance Batch Processing
+- **Batch Solving (`-b <file>`):** Benchmark and solve thousands of puzzles from file with microsecond precision.
+- **Detailed Step Breakdown (`-bs <file>`):** Output complete step-by-step technique explanations to stdout.
+- **Procedural Generator (`-g [count] -d <lvl> -s <sym>`):** Batch generate minimal clue symmetric puzzles to stdout or file.
+- **DLX Solve Check (`-sc <file>`):** Rapidly verify puzzle validity, solution counts, and mathematical uniqueness.
+
+### Studio Power Tools
+- **Bookmarks / Savepoints (`Ctrl+M`):** Save and restore board snapshots with pencilmarks and color markings.
+- **Level-1 Backdoor Search (`Ctrl+B`):** Find single-cell placements that instantly collapse puzzles to singles.
+- **Lossless PNG Export:** Render anti-aliased 600×600 board diagrams including active candidate overlays.
+
+### SIMD Hardware Acceleration
+- Accelerated with **Intel AVX2, FMA, and POPCNT** vector intrinsics:
+  - 128-bit `BitSet81` vectorization (`_mm_and_si128`, `_mm_testz_si128`, branchless `_mm_testc_si128`).
+  - Full-grid 81-cell candidate mask queries via 256-bit AVX2 broadcasts and parallel match extraction.
+  - Array-level bitmask intersections in Forcing Chains.
+
+---
+
+## Building and Running
+
+### Prerequisites
+- **Compiler:** Any modern C++20 compiler (GCC 13+ / Clang 16+ / MSVC 2022).
+- **Platform:** Windows 10/11 (64-bit).
+- **Libraries:** GDI+, ComCtl32, GDI32, User32, ComDlg32 (included in Windows SDK / MinGW-w64).
+
+### Option 1: Direct Build (MinGW-w64 GCC)
+
+```powershell
+# Build and run the core unit test suite
+g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
 .\bin\test_core.exe
 
-# Build the native Windows GUI application
-g++ -std=c++20 -O3 -Wall -Wextra src/app/main.cpp -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
-.\bin\hodoku_native.exe
+# Compile Windows resources (Icon, High-DPI Manifest, Version Info)
+windres src/app/resources.rc -O coff -o bin/resources.res
+
+# Build the native Windows GUI and CLI application
+g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra src/app/main.cpp bin/resources.res -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
 ```
 
 ### Option 2: CMake Build
@@ -111,6 +147,24 @@ g++ -std=c++20 -O3 -Wall -Wextra src/app/main.cpp -I src -lgdiplus -lcomctl32 -l
 cmake -B build -S .
 cmake --build build --config Release
 ctest --test-dir build --output-on-failure
+```
+
+---
+
+## Command-Line Interface (CLI)
+
+```text
+Usage: hodoku_native.exe [options] [puzzle]
+
+Options:
+  -b <file>                   Batch solve puzzles from file and output scores
+  -bs <file>                  Batch solve with full step-by-step solution paths
+  -g [count] -d <lvl> -s <sym> Batch generate puzzles to stdout or file
+                                -d <lvl>: 0=Easy, 1=Medium, 2=Hard, 3=Unfair, 4=Extreme
+                                -s <sym>: 180, 90, diag, anti, full, orth
+  -sc <file>                  Solve check: verify puzzle validity & uniqueness (DLX)
+  -o <file>                   Output destination file for generated puzzles
+  -h, --help                  Display this help message
 ```
 
 ---
@@ -135,6 +189,9 @@ ctest --test-dir build --output-on-failure
 | **`Ctrl + N`** | Generate New Random Sudoku |
 | **`Ctrl + R`** | Restart / Reset Current Puzzle |
 | **`Ctrl + G`** | Open **Set Givens** Modal Dialog |
+| **`Ctrl + M`** | Add Bookmark / Named Savepoint |
+| **`Ctrl + B`** | Find Level-1 Backdoors |
+| **`Ctrl + Shift + C`** | Toggle **ColorKu 3D Marble Mode** |
 | **`Ctrl + O` / `Ctrl + S`** | Open / Save Sudoku File |
 | **`Ctrl + C`** | Copy Pencilmark Grid to Clipboard |
 | **`Ctrl + V`** | Paste Sudoku String from Clipboard |
@@ -149,4 +206,5 @@ ctest --test-dir build --output-on-failure
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** (GPL-3.0), consistent with the original HoDoKu codebase. See the [COPYING](COPYING) file for full details.
+
 
