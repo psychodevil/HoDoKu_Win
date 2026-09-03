@@ -14,6 +14,8 @@
 #include "Chains.hpp"
 #include "AlmostLockedSets.hpp"
 #include "SueDeCoq.hpp"
+#include "MultiColors.hpp"
+#include "FrankenMutantFish.hpp"
 #include "ForcingChains.hpp"
 #include "Templates.hpp"
 #include "DlxSolver.hpp"
@@ -101,9 +103,12 @@ public:
         auto fxw = Fish::find_finned_x_wings(board);
         if (!fxw.empty()) return fxw.front();
 
-        // 9. Simple Colors
+        // 9. Simple Colors & Multi-Colors
         auto sc = Coloring::find_simple_colors(board);
         if (!sc.empty()) return sc.front();
+
+        auto mc = MultiColors::find_multi_colors(board);
+        if (!mc.empty()) return mc.front();
 
         // 10. Chains
         auto rp = Chains::find_remote_pairs(board);
@@ -118,6 +123,9 @@ public:
 
         auto sdc = SueDeCoq::find_sue_de_coq(board);
         if (!sdc.empty()) return sdc.front();
+
+        auto ff = FrankenMutantFish::find_franken_fish(board);
+        if (!ff.empty()) return ff.front();
 
         // 12. Forcing Chains (Cell, Region, Contradiction)
         auto cfc = ForcingChains::find_cell_forcing_chains(board);
@@ -197,10 +205,12 @@ public:
         append(Uniqueness::find_avoidable_rectangles(board));
         append(Fish::find_finned_x_wings(board));
         append(Coloring::find_simple_colors(board));
+        append(MultiColors::find_multi_colors(board));
         append(Chains::find_remote_pairs(board));
         append(Chains::find_xy_chains(board));
         append(AlmostLockedSets::find_als_xz(board));
         append(SueDeCoq::find_sue_de_coq(board));
+        append(FrankenMutantFish::find_franken_fish(board));
         append(ForcingChains::find_cell_forcing_chains(board));
         append(ForcingChains::find_house_forcing_chains(board));
         append(ForcingChains::find_contradiction_chains(board));

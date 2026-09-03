@@ -27,6 +27,8 @@ enum class TechniqueType {
     TurbotFish,
     SimpleColoring,
     SimpleColors,
+    MultiColors1,
+    MultiColors2,
     XYWing,
     XYZWing,
     WWing,
@@ -38,6 +40,8 @@ enum class TechniqueType {
     AlsXz,
     SueDeCoq,
     DeathBlossom,
+    FrankenFish,
+    MutantFish,
     BruteForce,
     Custom
 };
@@ -63,6 +67,8 @@ inline std::string technique_name(TechniqueType t) {
         case TechniqueType::TurbotFish: return "Turbot Fish";
         case TechniqueType::SimpleColoring: return "Simple Coloring";
         case TechniqueType::SimpleColors: return "Simple Colors";
+        case TechniqueType::MultiColors1: return "Multi-Colors Type 1";
+        case TechniqueType::MultiColors2: return "Multi-Colors Type 2";
         case TechniqueType::XYWing: return "XY-Wing";
         case TechniqueType::XYZWing: return "XYZ-Wing";
         case TechniqueType::WWing: return "W-Wing";
@@ -74,6 +80,8 @@ inline std::string technique_name(TechniqueType t) {
         case TechniqueType::AlsXz: return "Almost Locked Set XZ";
         case TechniqueType::SueDeCoq: return "Sue de Coq";
         case TechniqueType::DeathBlossom: return "Death Blossom";
+        case TechniqueType::FrankenFish: return "Franken Fish";
+        case TechniqueType::MutantFish: return "Mutant Fish";
         case TechniqueType::BruteForce: return "Brute Force";
         default: return "Custom Technique";
     }
