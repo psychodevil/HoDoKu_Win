@@ -103,10 +103,31 @@ public:
         centerFmt.SetLineAlignment(StringAlignmentCenter);
 
         const auto& board = studio.get_board();
-        auto selStep = studio.get_selected_step();
-        auto hintLvl = studio.get_hint_level();
+        auto activeStep = studio.get_hovered_step() ? studio.get_hovered_step() : studio.get_selected_step();
+        bool showStepOverlays = (studio.get_hint_level() == HintLevel::Concrete && studio.get_selected_step()) || studio.get_hovered_step().has_value();
+
+        int hoveredCell = studio.get_hovered_cell();
+        int hoveredCand = studio.get_hovered_candidate();
+        int selectedCell = studio.get_selected_cell();
         int activeFilter = studio.get_active_filter();
         bool filterBivalue = studio.is_bivalue_filter();
+
+        // Crosshair Guide (Subtle Row, Column, Box alignment guides)
+        if (hoveredCell >= 0 && hoveredCell < TOTAL_CELLS) {
+            int hr = cell_row(hoveredCell);
+            int hc = cell_col(hoveredCell);
+            int hb = cell_box(hoveredCell);
+            SolidBrush crosshairBrush(Color(20, 59, 130, 246)); // 8% alpha cool blue
+            for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+                if (cell != hoveredCell && (cell_row(cell) == hr || cell_col(cell) == hc || cell_box(cell) == hb)) {
+                    int r = cell_row(cell);
+                    int c = cell_col(cell);
+                    float cx = m_offsetX + c * m_cellSize;
+                    float cy = m_offsetY + r * m_cellSize;
+                    g.FillRectangle(&crosshairBrush, cx, cy, m_cellSize, m_cellSize);
+                }
+            }
+        }
 
         for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
             int r = cell_row(cell);
@@ -122,14 +143,17 @@ public:
             }
 
             // 2. Overlays
-            if (hintLvl == HintLevel::Concrete && selStep && selStep->primary_cells.test(cell)) {
+            if (showStepOverlays && activeStep && activeStep->primary_cells.test(cell)) {
                 g.FillRectangle(&primHintBrush, cx, cy, m_cellSize, m_cellSize);
-            } else if (hintLvl == HintLevel::Concrete && selStep && selStep->secondary_cells.test(cell)) {
+            } else if (showStepOverlays && activeStep && activeStep->secondary_cells.test(cell)) {
                 g.FillRectangle(&secHintBrush, cx, cy, m_cellSize, m_cellSize);
             } else if (activeFilter > 0 && (board.get_value(cell) == activeFilter || board.has_candidate(cell, activeFilter))) {
                 g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
             } else if (filterBivalue && board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
                 g.FillRectangle(&bivalueHitBrush, cx, cy, m_cellSize, m_cellSize);
+            } else if (cell == hoveredCell && cell != selectedCell) {
+                SolidBrush hoverCellBrush(Color(50, 59, 130, 246)); // Soft blue hover
+                g.FillRectangle(&hoverCellBrush, cx, cy, m_cellSize, m_cellSize);
             }
         }
 
@@ -152,12 +176,19 @@ public:
         }
 
         // Focus Cursor Accent Border (Exact Yellow outline from screenshot)
-        int selectedCell = studio.get_selected_cell();
         if (selectedCell >= 0) {
             int r = cell_row(selectedCell);
             int c = cell_col(selectedCell);
             Pen cursorPen(Color(255, 234, 179, 8), 2.5f); // Gold/Yellow border
             g.DrawRectangle(&cursorPen, m_offsetX + c * m_cellSize + 1.0f, m_offsetY + r * m_cellSize + 1.0f, m_cellSize - 2.0f, m_cellSize - 2.0f);
+        }
+
+        // Hovered Cell Accent Border
+        if (hoveredCell >= 0 && hoveredCell != selectedCell) {
+            int r = cell_row(hoveredCell);
+            int c = cell_col(hoveredCell);
+            Pen hoverPen(Color(180, 59, 130, 246), 1.8f); // Soft blue border
+            g.DrawRectangle(&hoverPen, m_offsetX + c * m_cellSize + 1.0f, m_offsetY + r * m_cellSize + 1.0f, m_cellSize - 2.0f, m_cellSize - 2.0f);
         }
 
         // Digits & Candidates
@@ -204,14 +235,14 @@ public:
 
                         bool isElim = false;
                         bool isAssign = false;
-                        if (hintLvl == HintLevel::Concrete && selStep) {
-                            for (const auto& elim : selStep->eliminations) {
+                        if (showStepOverlays && activeStep) {
+                            for (const auto& elim : activeStep->eliminations) {
                                 if (elim.cell == cell && elim.digit == d) {
                                     isElim = true;
                                     break;
                                 }
                             }
-                            for (const auto& asgn : selStep->assignments) {
+                            for (const auto& asgn : activeStep->assignments) {
                                 if (asgn.cell == cell && asgn.digit == d) {
                                     isAssign = true;
                                     break;
@@ -219,8 +250,14 @@ public:
                             }
                         }
 
+                        bool isHoveredCand = (cell == hoveredCell && d == hoveredCand);
+
                         if (studio.is_colorku_mode()) {
                             float beadRadius = subCell * 0.32f;
+                            if (isHoveredCand) {
+                                SolidBrush hoverRing(Color(180, 59, 130, 246));
+                                g.FillEllipse(&hoverRing, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            }
                             draw_colorku_marble(g, kx + subCell * 0.5f, ky + subCell * 0.5f, beadRadius, d);
                             if (isElim) {
                                 g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
@@ -234,7 +271,10 @@ public:
                                 g.FillRectangle(&candBg, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
                             }
 
-                            if (isAssign) {
+                            if (isHoveredCand) {
+                                SolidBrush candHoverPill(Color(200, 59, 130, 246));
+                                g.FillEllipse(&candHoverPill, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
+                            } else if (isAssign) {
                                 SolidBrush assignGlow(Color(180, 187, 247, 208));
                                 g.FillEllipse(&assignGlow, kx + 1.0f, ky + 1.0f, subCell - 2.0f, subCell - 2.0f);
                                 Pen assignBdr(Color(255, 34, 197, 94), 1.2f);
@@ -242,12 +282,14 @@ public:
                             }
 
                             bool isFilterMatch = (activeFilter == d);
+                            SolidBrush candHoverTextBrush(Color(255, 255, 255, 255));
                             Brush* cBrush = isElim ? static_cast<Brush*>(&candElimBrush)
+                                          : isHoveredCand ? static_cast<Brush*>(&candHoverTextBrush)
                                           : isFilterMatch ? static_cast<Brush*>(&candHighlightBrush)
                                           : isAssign ? static_cast<Brush*>(&candHighlightBrush)
                                           : static_cast<Brush*>(&candNormalBrush);
 
-                            Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
+                            Font* f = (isFilterMatch || isAssign || isHoveredCand) ? &candBoldFont : &candFont;
                             std::wstring candStr = std::to_wstring(d);
                             g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
 
@@ -262,7 +304,7 @@ public:
         }
 
         // Render Graphical Step Link Overlays (Strong & Weak Chain Links)
-        if (hintLvl == HintLevel::Concrete && selStep && !selStep->links.empty()) {
+        if (showStepOverlays && activeStep && !activeStep->links.empty()) {
             AdjustableArrowCap arrowCap(3.5f, 3.5f, true);
 
             Pen strongPen(Color(230, 34, 197, 94), 2.2f);
@@ -272,7 +314,7 @@ public:
             weakPen.SetDashStyle(DashStyleDash);
             weakPen.SetCustomEndCap(&arrowCap);
 
-            for (const auto& link : selStep->links) {
+            for (const auto& link : activeStep->links) {
                 float x1, y1, x2, y2;
                 if (link.from_digit >= 1 && link.from_digit <= 9) {
                     x1 = m_offsetX + cell_col(link.from_cell) * m_cellSize + ((link.from_digit - 1) % 3 + 0.5f) * subCell;

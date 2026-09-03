@@ -341,6 +341,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         int w = LOWORD(lParam);
         int h = HIWORD(lParam);
         LayoutHoDoKuControls(hwnd, w, h);
+        int toolbarH = 36;
+        int statusBarH = 20;
+        int hintBoxH = 86;
+        int middleY = toolbarH + 2;
+        int middleH = h - statusBarH - hintBoxH - 4 - middleY - 4;
+        g_renderer.update_layout(6, middleY, middleH, middleH);
         InvalidateRect(hwnd, NULL, FALSE);
         return 0;
     }
@@ -385,6 +391,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         DeleteDC(memDC);
 
         EndPaint(hwnd, &ps);
+        return 0;
+    }
+
+    case WM_MOUSEMOVE: {
+        int x = LOWORD(lParam);
+        int y = HIWORD(lParam);
+
+        TRACKMOUSEEVENT tme = {};
+        tme.cbSize = sizeof(TRACKMOUSEEVENT);
+        tme.dwFlags = TME_LEAVE;
+        tme.hwndTrack = hwnd;
+        TrackMouseEvent(&tme);
+
+        if (g_studio) {
+            int cell = g_renderer.hit_test_grid(x, y);
+            int cand = (cell >= 0) ? g_renderer.hit_test_candidate(x, y, cell) : 0;
+
+            if (cell != g_studio->get_hovered_cell() || cand != g_studio->get_hovered_candidate()) {
+                g_studio->set_hovered_cell(cell, cand);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+
+    case WM_MOUSELEAVE: {
+        if (g_studio) {
+            bool changed = (g_studio->get_hovered_cell() >= 0 || g_studio->get_hovered_step().has_value());
+            g_studio->clear_hover();
+            if (changed) {
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
         return 0;
     }
 
@@ -661,10 +702,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         LPNMHDR pnm = (LPNMHDR)lParam;
         if (pnm->idFrom == IDC_TAB_CONTROL && pnm->code == TCN_SELCHANGE) {
             int curSel = TabCtrl_GetCurSel(g_hTab);
+            if (g_studio) g_studio->clear_hover();
             SwitchTab(static_cast<TabView>(curSel), *g_studio);
             return 0;
         }
-        if (pnm->idFrom == IDC_LIST_STEPS && pnm->code == NM_DBLCLK) {
+        if (pnm->idFrom == IDC_LIST_STEPS && (pnm->code == LVN_HOTTRACK || pnm->code == NM_HOVER)) {
+            LPNMLISTVIEW pnmv = (LPNMLISTVIEW)lParam;
+            if (pnmv->iItem >= 0 && g_studio) {
+                if (g_currentTab == TabView::SolutionPath) {
+                    const auto& path = g_studio->get_solution_path();
+                    if (static_cast<size_t>(pnmv->iItem) < path.size()) {
+                        g_studio->set_hovered_step(path[pnmv->iItem]);
+                    }
+                } else if (g_currentTab == TabView::AllSteps) {
+                    const auto& steps = g_studio->get_fas_steps();
+                    if (static_cast<size_t>(pnmv->iItem) < steps.size()) {
+                        g_studio->set_hovered_step(steps[pnmv->iItem]);
+                    }
+                }
+            } else if (g_studio) {
+                g_studio->set_hovered_step(std::nullopt);
+            }
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+        if (pnm->idFrom == IDC_LIST_STEPS && (pnm->code == NM_CLICK || pnm->code == NM_DBLCLK)) {
             LPNMITEMACTIVATE pItem = (LPNMITEMACTIVATE)lParam;
             if (pItem->iItem >= 0 && g_studio) {
                 if (g_currentTab == TabView::SolutionPath) {

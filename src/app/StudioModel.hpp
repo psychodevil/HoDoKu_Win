@@ -589,6 +589,20 @@ public:
     // Getters & Setters
     int get_selected_cell() const { return m_selectedCell; }
     void set_selected_cell(int c) { m_selectedCell = c; }
+    int get_hovered_cell() const { return m_hoveredCell; }
+    int get_hovered_candidate() const { return m_hoveredCandidate; }
+    void set_hovered_cell(int cell, int candidate = 0) {
+        m_hoveredCell = cell;
+        m_hoveredCandidate = candidate;
+    }
+    void clear_hover() {
+        m_hoveredCell = -1;
+        m_hoveredCandidate = 0;
+        m_hoveredStep.reset();
+    }
+    const std::optional<Step>& get_hovered_step() const { return m_hoveredStep; }
+    void set_hovered_step(const std::optional<Step>& step) { m_hoveredStep = step; }
+
     int get_unfilled_count() const { return m_board.unfilled_count(); }
     DifficultyLevel get_hardest_level() const { return m_hardestLevel; }
     int get_total_score() const { return m_totalScore; }
@@ -633,6 +647,10 @@ private:
     HintLevel m_hintLevel{HintLevel::None};
 
     int m_selectedCell{0};
+    int m_hoveredCell{-1};
+    int m_hoveredCandidate{0};
+    std::optional<Step> m_hoveredStep;
+
     int m_activeFilterDigit{0};
     bool m_filterBivalue{false};
 

@@ -334,17 +334,51 @@ inline void UpdateHintBoxText(const HoDoKuStudio& studio) {
 inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     if (!g_hStatusBar) return;
 
-    std::wstring lvlName = L"Easy";
-    switch (studio.get_hardest_level()) {
-        case DifficultyLevel::Easy: lvlName = L"Easy"; break;
-        case DifficultyLevel::Medium: lvlName = L"Medium"; break;
-        case DifficultyLevel::Hard: lvlName = L"Hard"; break;
-        case DifficultyLevel::Unfair: lvlName = L"Unfair"; break;
-        case DifficultyLevel::Extreme: lvlName = L"Extreme"; break;
+    std::wstring part1;
+    int hCell = studio.get_hovered_cell();
+    int hCand = studio.get_hovered_candidate();
+
+    if (hCell >= 0 && hCell < TOTAL_CELLS) {
+        int r = cell_row(hCell) + 1;
+        int c = cell_col(hCell) + 1;
+        const auto& board = studio.get_board();
+        uint8_t val = board.get_value(hCell);
+
+        part1 = L" Cell r" + std::to_wstring(r) + L"c" + std::to_wstring(c);
+        if (val != 0) {
+            part1 += L" = " + std::to_wstring(val) + (board.is_given(hCell) ? L" (Given)" : L" (User)");
+        } else {
+            CandidateMask mask = board.get_candidates(hCell);
+            part1 += L"  Candidates: [";
+            bool first = true;
+            for (int d = 1; d <= 9; ++d) {
+                if (mask_has_digit(mask, d)) {
+                    if (!first) part1 += L", ";
+                    part1 += std::to_wstring(d);
+                    first = false;
+                }
+            }
+            part1 += L"]";
+
+            if (hCand > 0 && mask_has_digit(mask, hCand)) {
+                part1 += L"  |  Target: Candidate " + std::to_wstring(hCand);
+            }
+        }
+    } else {
+        std::wstring lvlName = L"Easy";
+        switch (studio.get_hardest_level()) {
+            case DifficultyLevel::Easy: lvlName = L"Easy"; break;
+            case DifficultyLevel::Medium: lvlName = L"Medium"; break;
+            case DifficultyLevel::Hard: lvlName = L"Hard"; break;
+            case DifficultyLevel::Unfair: lvlName = L"Unfair"; break;
+            case DifficultyLevel::Extreme: lvlName = L"Extreme"; break;
+        }
+
+        int score = studio.get_total_score();
+        int givens = studio.get_givens_count();
+        part1 = L" [Colors: 1-9, R=Clear]  |  Level: " + lvlName + L"  |  Score: " + std::to_wstring(score) + L"  |  Givens: " + std::to_wstring(givens);
     }
 
-    int score = studio.get_total_score();
-    int givens = studio.get_givens_count();
     int freeCells = studio.get_unfilled_count();
     int progress = static_cast<int>((81 - freeCells) * 100.0f / 81.0f);
 
@@ -355,7 +389,6 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
         modeStr = L"Practicing (Training Active)";
     }
 
-    std::wstring part1 = L" [Colors: 1-9, R=Clear]  |  Level: " + lvlName + L"  |  Score: " + std::to_wstring(score) + L"  |  Givens: " + std::to_wstring(givens);
     std::wstring part2 = L" Progress: " + std::to_wstring(progress) + L"% (" + std::to_wstring(freeCells) + L" free)  |  Mode: " + modeStr;
 
     SendMessageW(g_hStatusBar, SB_SETTEXT, 0, (LPARAM)part1.c_str());
@@ -540,7 +573,7 @@ inline void CreateHoDoKuUI(HWND hwnd) {
     g_hListView = CreateWindowW(WC_LISTVIEWW, L"", WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
                                 0, 0, 100, 100, hwnd, (HMENU)(INT_PTR)IDC_LIST_STEPS, NULL, NULL);
     SendMessage(g_hListView, WM_SETFONT, (WPARAM)hFont, TRUE);
-    ListView_SetExtendedListViewStyle(g_hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+    ListView_SetExtendedListViewStyle(g_hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_TRACKSELECT);
 
     // 4. Active Cell (CellZoomPanel) Controls
     HFONT hBannerFont = CreateFontW(15, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
