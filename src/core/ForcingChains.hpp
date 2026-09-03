@@ -10,6 +10,10 @@
 #include "BoardState.hpp"
 #include "Step.hpp"
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 namespace hodoku::core {
 
 class ForcingChains {
@@ -103,7 +107,7 @@ public:
                 if (mask_has_digit(mask, d)) digits.push_back(d);
             }
 
-            std::vector<std::array<CandidateMask, TOTAL_CELLS>> branch_eliminations;
+            std::vector<std::array<CandidateMask, 96>> branch_eliminations;
             bool all_branches_valid = true;
 
             for (int d : digits) {
@@ -114,7 +118,7 @@ public:
                     break;
                 }
 
-                std::array<CandidateMask, TOTAL_CELLS> branch_elims{};
+                alignas(32) std::array<CandidateMask, 96> branch_elims{};
                 branch_elims.fill(EMPTY_MASK);
                 for (int c2 = 0; c2 < TOTAL_CELLS; ++c2) {
                     if (board.is_unfilled(c2) && sim.is_unfilled(c2)) {
@@ -129,12 +133,22 @@ public:
             if (!all_branches_valid || branch_eliminations.empty()) continue;
 
             // Intersect eliminations across all branches
-            std::array<CandidateMask, TOTAL_CELLS> common_elims = branch_eliminations[0];
+            alignas(32) std::array<CandidateMask, 96> common_elims = branch_eliminations[0];
+#if defined(__AVX2__)
+            for (size_t i = 1; i < branch_eliminations.size(); ++i) {
+                __m256i* dest = reinterpret_cast<__m256i*>(common_elims.data());
+                const __m256i* src = reinterpret_cast<const __m256i*>(branch_eliminations[i].data());
+                for (int k = 0; k < 6; ++k) {
+                    dest[k] = _mm256_and_si256(dest[k], src[k]);
+                }
+            }
+#else
             for (size_t i = 1; i < branch_eliminations.size(); ++i) {
                 for (int c2 = 0; c2 < TOTAL_CELLS; ++c2) {
                     common_elims[c2] &= branch_eliminations[i][c2];
                 }
             }
+#endif
 
             Step step;
             step.type = TechniqueType::Custom;

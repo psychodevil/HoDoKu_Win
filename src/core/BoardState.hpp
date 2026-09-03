@@ -10,10 +10,27 @@
 #include "BitSet81.hpp"
 #include "GridConstants.hpp"
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 namespace hodoku::core {
 
 class BoardState {
 public:
+#if defined(__AVX2__)
+    static inline uint32_t extract_mask16(__m256i cmp) noexcept {
+#if defined(__BMI2__)
+        return _pext_u32(static_cast<uint32_t>(_mm256_movemask_epi8(cmp)), 0x55555555U);
+#else
+        __m128i lo_lane = _mm256_castsi256_si128(cmp);
+        __m128i hi_lane = _mm256_extracti128_si256(cmp, 1);
+        __m128i packed = _mm_packs_epi16(lo_lane, hi_lane);
+        return static_cast<uint32_t>(_mm_movemask_epi8(packed));
+#endif
+    }
+#endif
+
     BoardState() noexcept {
         clear();
     }
@@ -25,7 +42,8 @@ public:
 
     void clear() noexcept {
         m_values.fill(0);
-        m_candidates.fill(ALL_CANDIDATES_MASK);
+        m_candidates.fill(0);
+        for (int i = 0; i < TOTAL_CELLS; ++i) m_candidates[i] = ALL_CANDIDATES_MASK;
         m_givens.clear();
         m_unfilled_cells = BitSet81::all();
         m_contradiction = false;
@@ -84,6 +102,22 @@ public:
     }
 
     [[nodiscard]] BitSet81 get_cells_with_candidate(int digit) const noexcept {
+#if defined(__AVX2__)
+        __m256i tgt = _mm256_set1_epi16(static_cast<short>(digit_to_mask(digit)));
+        const __m256i* ptr = reinterpret_cast<const __m256i*>(m_candidates.data());
+
+        uint64_t m0 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 0), tgt), tgt));
+        uint64_t m1 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 1), tgt), tgt));
+        uint64_t m2 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 2), tgt), tgt));
+        uint64_t m3 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 3), tgt), tgt));
+        uint64_t lo_bits = m0 | (m1 << 16) | (m2 << 32) | (m3 << 48);
+
+        uint64_t m4 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 4), tgt), tgt));
+        uint64_t m5 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 5), tgt), tgt));
+        uint64_t hi_bits = (m4 | (m5 << 16)) & BitSet81::HI_MASK;
+
+        return BitSet81(lo_bits, hi_bits) & m_unfilled_cells;
+#else
         BitSet81 result;
         CandidateMask target = digit_to_mask(digit);
         m_unfilled_cells.for_each_cell([&](int cell) {
@@ -92,6 +126,7 @@ public:
             }
         });
         return result;
+#endif
     }
 
     [[nodiscard]] BitSet81 get_candidates_in_house(int house_idx, int digit) const noexcept {
@@ -264,7 +299,7 @@ public:
 
 private:
     std::array<uint8_t, TOTAL_CELLS> m_values{};
-    std::array<CandidateMask, TOTAL_CELLS> m_candidates{};
+    alignas(32) std::array<CandidateMask, 96> m_candidates{};
     BitSet81 m_givens{};
     BitSet81 m_unfilled_cells{};
     std::array<std::array<uint8_t, 10>, TOTAL_HOUSES> m_house_candidate_counts{};

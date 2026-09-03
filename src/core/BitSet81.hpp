@@ -6,9 +6,14 @@
 #include <concepts>
 #include "Types.hpp"
 
+#if defined(__SSE4_1__) || defined(__AVX2__)
+#include <immintrin.h>
+#define HODOKU_SIMD_SSE4 1
+#endif
+
 namespace hodoku::core {
 
-class BitSet81 {
+class alignas(16) BitSet81 {
 public:
     static constexpr uint64_t HI_MASK = (1ULL << (TOTAL_CELLS - 64)) - 1ULL; // 17 bits: 0x1FFFF
 
@@ -72,6 +77,12 @@ public:
     }
 
     [[nodiscard]] constexpr bool empty() const noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            return _mm_testz_si128(a, a) != 0;
+        }
+#endif
         return lo == 0 && hi == 0;
     }
 
@@ -84,11 +95,39 @@ public:
     }
 
     [[nodiscard]] constexpr bool is_subset_of(const BitSet81& other) const noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&other));
+            return _mm_testc_si128(b, a) != 0;
+        }
+#endif
         return ((lo & ~other.lo) == 0) && ((hi & ~other.hi) == 0);
     }
 
     [[nodiscard]] constexpr bool intersects(const BitSet81& other) const noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&other));
+            return _mm_testz_si128(a, b) == 0;
+        }
+#endif
         return ((lo & other.lo) != 0) || ((hi & other.hi) != 0);
+    }
+
+    [[nodiscard]] constexpr BitSet81 and_not(const BitSet81& other) const noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&other));
+            __m128i r = _mm_andnot_si128(b, a);
+            BitSet81 res;
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&res), r);
+            return res;
+        }
+#endif
+        return BitSet81(lo & ~other.lo, hi & ~other.hi);
     }
 
     [[nodiscard]] constexpr int first_cell() const noexcept {
@@ -132,32 +171,89 @@ public:
     }
 
     constexpr BitSet81& operator&=(const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_and_si128(a, b);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(this), r);
+            return *this;
+        }
+#endif
         lo &= rhs.lo;
         hi &= rhs.hi;
         return *this;
     }
 
     constexpr BitSet81& operator|=(const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_or_si128(a, b);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(this), r);
+            return *this;
+        }
+#endif
         lo |= rhs.lo;
         hi |= rhs.hi;
         return *this;
     }
 
     constexpr BitSet81& operator^=(const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(this));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_xor_si128(a, b);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(this), r);
+            return *this;
+        }
+#endif
         lo ^= rhs.lo;
         hi ^= rhs.hi;
         return *this;
     }
 
     [[nodiscard]] friend constexpr BitSet81 operator&(BitSet81 lhs, const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&lhs));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_and_si128(a, b);
+            BitSet81 res;
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&res), r);
+            return res;
+        }
+#endif
         return BitSet81(lhs.lo & rhs.lo, lhs.hi & rhs.hi);
     }
 
     [[nodiscard]] friend constexpr BitSet81 operator|(BitSet81 lhs, const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&lhs));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_or_si128(a, b);
+            BitSet81 res;
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&res), r);
+            return res;
+        }
+#endif
         return BitSet81(lhs.lo | rhs.lo, lhs.hi | rhs.hi);
     }
 
     [[nodiscard]] friend constexpr BitSet81 operator^(BitSet81 lhs, const BitSet81& rhs) noexcept {
+#if defined(HODOKU_SIMD_SSE4)
+        if (!std::is_constant_evaluated()) {
+            __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&lhs));
+            __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rhs));
+            __m128i r = _mm_xor_si128(a, b);
+            BitSet81 res;
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&res), r);
+            return res;
+        }
+#endif
         return BitSet81(lhs.lo ^ rhs.lo, lhs.hi ^ rhs.hi);
     }
 
