@@ -31,7 +31,7 @@ add_test(NAME CoreEngineTests COMMAND test_core)
 
 # Native Windows GUI Executable
 if(WIN32)
-    add_executable(hodoku_native WIN32 src/app/main.cpp)
+    add_executable(hodoku_native WIN32 src/app/main.cpp src/app/resources.rc)
     target_link_libraries(hodoku_native PRIVATE
         hodoku_core
         gdiplus
