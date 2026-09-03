@@ -1,0 +1,56 @@
+name: Release Build & Distribution
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Windows x64 Release Build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MinGW-w64 GCC
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          version: 13.2.0
+          platform: x64
+
+      - name: Compile and Run Test Suite
+        run: |
+          mkdir -p bin
+          g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
+          ./bin/test_core.exe
+
+      - name: Compile Windows Resources
+        run: |
+          windres src/app/resources.rc -O coff -o bin/resources.res
+
+      - name: Compile Native HoDoKu Executable (AVX2 Vectorized)
+        run: |
+          g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra src/app/main.cpp bin/resources.res -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
+
+      - name: Package Release Assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package/HoDoKu_Native
+          Copy-Item bin/hodoku_native.exe package/HoDoKu_Native/
+          Copy-Item README.md package/HoDoKu_Native/
+          Copy-Item COPYING package/HoDoKu_Native/
+          if (Test-Path "exemplars-1.0.txt") { Copy-Item exemplars-1.0.txt package/HoDoKu_Native/ }
+          Compress-Archive -Path package/HoDoKu_Native/* -DestinationPath "HoDoKu-Native-${{ github.ref_name }}-Windows-x64.zip"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: HoDoKu-Native-${{ github.ref_name }}-Windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

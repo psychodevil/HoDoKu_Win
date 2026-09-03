@@ -24,13 +24,17 @@ jobs:
       - name: Compile Core Test Suite
         run: |
           mkdir -p bin
-          g++ -std=c++20 -O3 -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
+          g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra tests/test_core.cpp -I src -o bin/test_core.exe
 
       - name: Run Core Test Suite
         run: |
           ./bin/test_core.exe
 
+      - name: Compile Windows Resources
+        run: |
+          windres src/app/resources.rc -O coff -o bin/resources.res
+
       - name: Compile Native HoDoKu GUI Application
         run: |
-          g++ -std=c++20 -O3 -Wall -Wextra src/app/main.cpp -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
+          g++ -std=c++20 -O3 -mavx2 -mfma -mpopcnt -Wall -Wextra src/app/main.cpp bin/resources.res -I src -lgdiplus -lcomctl32 -lgdi32 -luser32 -lcomdlg32 -o bin/hodoku_native.exe
 
