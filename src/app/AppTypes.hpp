@@ -86,6 +86,9 @@ static const Color COLORKU_PALETTE[10] = {
     Color(255, 248, 250, 252)  // 9: Pearl White
 };
 
+// Resource IDs
+constexpr int IDI_APP_ICON = 101;
+
 // Menu & Control IDs
 enum MenuAndControlId {
     IDM_FILE_NEW = 2001,

@@ -378,5 +378,42 @@ inline void ShowBackdoorsDialog(HWND hwnd, const HoDoKuStudio& studio) {
     MessageBoxW(hwnd, msg.c_str(), L"Backdoors Discovered (Ctrl+B) - HoDoKu", MB_OK | MB_ICONINFORMATION);
 }
 
+inline void ShowAboutDialog(HWND hwnd) {
+    std::wstring msg =
+        L"HoDoKu Native (C++20 Edition)\n"
+        L"Version 2.2.0\n\n"
+        L"A modern, high-performance native Windows C++20 port and recreation\n"
+        L"of the classic HoDoKu Sudoku Studio by Bernhard Hobiger.\n\n"
+        L"• Original Algorithm Design: Bernhard Hobiger\n"
+        L"• Native Windows C++20 Re-architecture: psychodevil\n"
+        L"• License: GNU General Public License v3.0 (GPLv3)\n"
+        L"• Repository: https://github.com/psychodevil/HoDoKu_Win\n\n"
+        L"Key Capabilities:\n"
+        L"  ✓ Complete logical solving hierarchy & Find-All-Steps (FAS)\n"
+        L"  ✓ Knuth's Dancing Links (DLX) exact cover solver\n"
+        L"  ✓ SIMD AVX2 / SSE4.1 bitboard & candidate vectorization\n"
+        L"  ✓ ColorKu 3D marble sphere rendering mode (Ctrl+Shift+C)\n"
+        L"  ✓ Targeted technique training generator & thread pool\n"
+        L"  ✓ Headless CLI batch solver & puzzle generator suite";
+
+    MessageBoxW(hwnd, msg.c_str(), L"About HoDoKu Native Studio", MB_OK | MB_ICONINFORMATION);
+}
+
+inline void ShowPreferencesDialog(HWND hwnd, HoDoKuStudio& studio) {
+    std::wstring msg =
+        L"HoDoKu Native Preferences\n\n"
+        L"Current Configuration:\n"
+        L" • ColorKu 3D Marble Mode: " + std::wstring(studio.is_colorku_mode() ? L"Enabled" : L"Disabled") + L"\n"
+        L" • SIMD Instruction Set: AVX2 + FMA + POPCNT (Active)\n"
+        L" • Background Generator: Active (2 cached puzzles / tier)\n\n"
+        L"Would you like to toggle ColorKu 3D Marble Mode?";
+
+    int choice = MessageBoxW(hwnd, msg.c_str(), L"Preferences - HoDoKu Native", MB_YESNO | MB_ICONQUESTION);
+    if (choice == IDYES) {
+        studio.toggle_colorku_mode();
+        InvalidateRect(hwnd, NULL, FALSE);
+    }
+}
+
 } // namespace hodoku::ui
 

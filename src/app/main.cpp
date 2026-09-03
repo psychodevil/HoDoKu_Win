@@ -4,6 +4,7 @@
 #include "Dialogs.hpp"
 #include "UiLayout.hpp"
 #include "CommandLine.hpp"
+#include "Settings.hpp"
 
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "comctl32.lib")
@@ -538,7 +539,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         } else if (id == IDM_FILE_SET_GIVENS) {
             ShowSetGivensDialog(hwnd, *g_studio);
         } else if (id == IDM_OPTIONS_PREFERENCES || id == 9201) {
-            ShowPreferencesDialog(hwnd);
+            if (g_studio) ShowPreferencesDialog(hwnd, *g_studio);
+        } else if (id == IDM_HELP_ABOUT) {
+            ShowAboutDialog(hwnd);
+        } else if (id == IDM_HELP_MANUAL) {
+            ShellExecuteW(hwnd, L"open", L"https://github.com/psychodevil/HoDoKu_Win", NULL, NULL, SW_SHOWNORMAL);
+        } else if (id == IDM_HELP_TECHNIQUES) {
+            ShellExecuteW(hwnd, L"open", L"http://hodoku.sourceforge.net/en/techniques.php", NULL, NULL, SW_SHOWNORMAL);
         } else if (id == IDM_MODE_PLAYING) {
             g_studio->set_game_mode(GameMode::Playing);
             UpdateStatusBarText(*g_studio);
@@ -794,9 +801,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
 
-    case WM_DESTROY:
+    case WM_DESTROY: {
+        WINDOWPLACEMENT wp = {};
+        wp.length = sizeof(WINDOWPLACEMENT);
+        if (GetWindowPlacement(hwnd, &wp)) {
+            AppSettings s;
+            s.window_x = wp.rcNormalPosition.left;
+            s.window_y = wp.rcNormalPosition.top;
+            s.window_w = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+            s.window_h = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+            s.maximized = (wp.showCmd == SW_SHOWMAXIMIZED);
+            if (g_studio) {
+                s.game_mode = static_cast<int>(g_studio->get_game_mode());
+                s.colorku_mode = g_studio->is_colorku_mode();
+            }
+            SettingsManager::save(s);
+        }
         PostQuitMessage(0);
         return 0;
+    }
     }
 
     return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -810,6 +833,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if (CommandLine::process_command_line(__argc, __argv)) {
         return 0;
     }
+
+    // High-DPI Awareness (Per-Monitor V2)
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     // GDI+ Startup
     GdiplusStartupInput gdiplusStartupInput;
@@ -828,24 +854,39 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
+    wc.hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    wc.hIconSm = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 16, 16, LR_DEFAULTCOLOR);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     wc.lpszClassName = CLASS_NAME;
 
     RegisterClassExW(&wc);
 
+    AppSettings settings = SettingsManager::load();
+
     HWND hwnd = CreateWindowExW(
         0,
         CLASS_NAME,
         L"HoDoKu 2.2 - Native C++20 Edition",
         WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-        CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
+        settings.window_x, settings.window_y, settings.window_w, settings.window_h,
         NULL, NULL, hInstance, NULL
     );
 
     if (!hwnd) {
         GdiplusShutdown(gdiplusToken);
         return 0;
+    }
+
+    if (settings.maximized) {
+        nCmdShow = SW_SHOWMAXIMIZED;
+    }
+
+    if (g_studio) {
+        if (settings.colorku_mode) g_studio->set_colorku_mode(true);
+        if (settings.game_mode >= 0 && settings.game_mode <= 2) {
+            g_studio->set_game_mode(static_cast<GameMode>(settings.game_mode));
+        }
     }
 
     ShowWindow(hwnd, nCmdShow);

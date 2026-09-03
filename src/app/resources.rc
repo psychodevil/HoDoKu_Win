@@ -1,0 +1,37 @@
+#include <windows.h>
+
+// Application Icon
+101 ICON "src/img/hodoku02.ico"
+
+// High-DPI & Common Controls v6 Manifest
+1 24 "src/app/app.manifest"
+
+// Version Information
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     2,2,0,0
+PRODUCTVERSION  2,2,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "HoDoKu Project\0"
+            VALUE "FileDescription",  "HoDoKu Native C++20 Sudoku Studio\0"
+            VALUE "FileVersion",      "2.2.0.0\0"
+            VALUE "InternalName",     "hodoku_native\0"
+            VALUE "LegalCopyright",   "GNU General Public License v3.0\0"
+            VALUE "OriginalFilename", "hodoku_native.exe\0"
+            VALUE "ProductName",      "HoDoKu Native\0"
+            VALUE "ProductVersion",   "2.2.0.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
