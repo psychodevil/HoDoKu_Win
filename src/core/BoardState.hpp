@@ -261,6 +261,30 @@ public:
         return valid_candidates;
     }
 
+    [[nodiscard]] BitSet81 get_invalid_conflict_cells() const noexcept {
+        BitSet81 conflicts;
+        for (int h = 0; h < TOTAL_HOUSES; ++h) {
+            for (size_t i = 0; i < 9; ++i) {
+                int c1 = GRID.house_cells[h][i];
+                uint8_t v1 = m_values[c1];
+                if (v1 == 0) continue;
+                for (size_t j = i + 1; j < 9; ++j) {
+                    int c2 = GRID.house_cells[h][j];
+                    if (m_values[c2] == v1) {
+                        conflicts.set(c1);
+                        conflicts.set(c2);
+                    }
+                }
+            }
+        }
+        m_unfilled_cells.for_each_cell([&](int cell) {
+            if (m_candidates[cell] == EMPTY_MASK) {
+                conflicts.set(cell);
+            }
+        });
+        return conflicts;
+    }
+
     [[nodiscard]] bool is_solved() const noexcept {
         return m_unfilled_cells.empty() && is_valid();
     }
