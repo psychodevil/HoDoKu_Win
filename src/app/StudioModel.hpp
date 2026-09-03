@@ -283,6 +283,10 @@ public:
         m_filterBivalue = false;
     }
 
+    bool is_filter_excluded_mode() const { return m_filterExcluded; }
+    void toggle_filter_mode() { m_filterExcluded = !m_filterExcluded; }
+    void set_filter_excluded_mode(bool val) { m_filterExcluded = val; }
+
     void give_vague_hint() {
         if (m_solutionPath.empty()) recalculate_solution_path();
         if (!m_solutionPath.empty()) {
@@ -653,6 +657,7 @@ private:
 
     int m_activeFilterDigit{0};
     bool m_filterBivalue{false};
+    bool m_filterExcluded{false};
 
     int m_totalScore{0};
     DifficultyLevel m_hardestLevel{DifficultyLevel::Easy};

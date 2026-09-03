@@ -95,7 +95,8 @@ public:
         // Cell Background Highlights
         SolidBrush primHintBrush(Color(255, 255, 242, 117));     // HoDoKu Yellow Hint (#fff275)
         SolidBrush secHintBrush(Color(255, 255, 211, 182));      // HoDoKu Peach Secondary (#ffd3b6)
-        SolidBrush filterHitBrush(Color(255, 185, 255, 185));    // HoDoKu POSSIBLE_CELL_COLOR from Options.java
+        SolidBrush filterHitBrush(Color(255, 185, 255, 185));    // HoDoKu POSSIBLE_CELL_COLOR from Options.java (#b9ffb9)
+        SolidBrush invalidCellBrush(Color(255, 255, 185, 185));  // HoDoKu INVALID_CELL_COLOR from Options.java (#ffb9b9)
         SolidBrush bivalueHitBrush(Color(255, 220, 252, 231));   // Bi-value Green
 
         StringFormat centerFmt;
@@ -111,6 +112,8 @@ public:
         int selectedCell = studio.get_selected_cell();
         int activeFilter = studio.get_active_filter();
         bool filterBivalue = studio.is_bivalue_filter();
+        bool filterExcluded = studio.is_filter_excluded_mode();
+        BitSet81 conflictCells = board.get_invalid_conflict_cells();
 
         // Crosshair Guide (Subtle Row, Column, Box alignment guides)
         if (hoveredCell >= 0 && hoveredCell < TOTAL_CELLS) {
@@ -129,6 +132,7 @@ public:
             }
         }
 
+        // Cell Background Highlights
         for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
             int r = cell_row(cell);
             int c = cell_col(cell);
@@ -147,10 +151,22 @@ public:
                 g.FillRectangle(&primHintBrush, cx, cy, m_cellSize, m_cellSize);
             } else if (showStepOverlays && activeStep && activeStep->secondary_cells.test(cell)) {
                 g.FillRectangle(&secHintBrush, cx, cy, m_cellSize, m_cellSize);
-            } else if (activeFilter > 0 && (board.get_value(cell) == activeFilter || board.has_candidate(cell, activeFilter))) {
-                g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
+            } else if (activeFilter > 0) {
+                bool hasDigit = (board.get_value(cell) == activeFilter || board.has_candidate(cell, activeFilter));
+                if (!filterExcluded && hasDigit) {
+                    // Green mode: highlight cells that contain the candidate
+                    g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
+                } else if (filterExcluded && !hasDigit && board.is_unfilled(cell)) {
+                    // Red mode: highlight cells where the candidate is excluded/invalid
+                    g.FillRectangle(&invalidCellBrush, cx, cy, m_cellSize, m_cellSize);
+                } else if (filterExcluded && hasDigit) {
+                    g.FillRectangle(&filterHitBrush, cx, cy, m_cellSize, m_cellSize);
+                }
             } else if (filterBivalue && board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
                 g.FillRectangle(&bivalueHitBrush, cx, cy, m_cellSize, m_cellSize);
+            } else if (filterExcluded && conflictCells.test(cell)) {
+                // Red mode with no filter: highlight all duplicate conflicts
+                g.FillRectangle(&invalidCellBrush, cx, cy, m_cellSize, m_cellSize);
             } else if (cell == hoveredCell && cell != selectedCell) {
                 SolidBrush hoverCellBrush(Color(50, 59, 130, 246)); // Soft blue hover
                 g.FillRectangle(&hoverCellBrush, cx, cy, m_cellSize, m_cellSize);
@@ -351,4 +367,3 @@ private:
 };
 
 } // namespace hodoku::ui
-

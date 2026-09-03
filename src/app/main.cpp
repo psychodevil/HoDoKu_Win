@@ -504,6 +504,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             UpdateHintBoxText(*g_studio);
             UpdateStatusBarText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDC_BTN_RED_GREEN) {
+            g_studio->toggle_filter_mode();
+            for (HWND b : g_toolbarButtons) InvalidateRect(b, NULL, TRUE);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
         } else if (id >= IDC_BTN_FILTER_1 && id <= IDC_BTN_FILTER_9) {
             int d = id - IDC_BTN_FILTER_1 + 1;
             g_studio->toggle_filter_digit(d);
@@ -751,12 +756,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         // 1. Red/Green Swatch Button in Toolbar
         if (id == IDC_BTN_RED_GREEN) {
-            SolidBrush redB(Color(255, 239, 68, 68));
-            SolidBrush greenB(Color(255, 34, 197, 94));
-            g.FillRectangle(&redB, 1, 1, 10, 20);
-            g.FillRectangle(&greenB, 11, 1, 10, 20);
-            Pen bdr(Color(255, 100, 100, 100), 1.0f);
-            g.DrawRectangle(&bdr, 0, 0, 21, 21);
+            bool excluded = g_studio && g_studio->is_filter_excluded_mode();
+            int w = pdis->rcItem.right - pdis->rcItem.left;
+            int h = pdis->rcItem.bottom - pdis->rcItem.top;
+            int halfW = w / 2;
+
+            // Red half (left)
+            Color redCol = excluded ? Color(255, 239, 68, 68) : Color(110, 239, 68, 68);
+            SolidBrush redB(redCol);
+            g.FillRectangle(&redB, 1, 1, halfW - 1, h - 2);
+
+            // Green half (right)
+            Color greenCol = (!excluded) ? Color(255, 34, 197, 94) : Color(110, 34, 197, 94);
+            SolidBrush greenB(greenCol);
+            g.FillRectangle(&greenB, halfW, 1, w - halfW - 1, h - 2);
+
+            // Active mode highlight indicator
+            if (excluded) {
+                Pen actPen(Color(255, 153, 27, 27), 2.0f);
+                g.DrawRectangle(&actPen, 1, 1, halfW - 1, h - 2);
+            } else {
+                Pen actPen(Color(255, 20, 83, 45), 2.0f);
+                g.DrawRectangle(&actPen, halfW, 1, w - halfW - 2, h - 2);
+            }
+
+            Pen bdr(Color(255, 90, 90, 90), 1.0f);
+            g.DrawRectangle(&bdr, 0, 0, w - 1, h - 1);
             return TRUE;
         }
 
@@ -876,6 +901,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (g_studio) {
                 s.game_mode = static_cast<int>(g_studio->get_game_mode());
                 s.colorku_mode = g_studio->is_colorku_mode();
+                s.filter_excluded = g_studio->is_filter_excluded_mode();
             }
             SettingsManager::save(s);
         }
@@ -946,6 +972,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     if (g_studio) {
         if (settings.colorku_mode) g_studio->set_colorku_mode(true);
+        if (settings.filter_excluded) g_studio->set_filter_excluded_mode(true);
         if (settings.game_mode >= 0 && settings.game_mode <= 2) {
             g_studio->set_game_mode(static_cast<GameMode>(settings.game_mode));
         }

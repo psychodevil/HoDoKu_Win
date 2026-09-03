@@ -13,6 +13,7 @@ struct AppSettings {
     bool maximized{false};
     int game_mode{0}; // 0 = Playing, 1 = Learning, 2 = Practicing
     bool colorku_mode{false};
+    bool filter_excluded{false};
 };
 
 class SettingsManager {
@@ -41,6 +42,7 @@ public:
 
         s.game_mode = GetPrivateProfileIntW(L"State", L"GameMode", 0, ini.c_str());
         s.colorku_mode = (GetPrivateProfileIntW(L"State", L"ColorKu", 0, ini.c_str()) != 0);
+        s.filter_excluded = (GetPrivateProfileIntW(L"State", L"FilterExcluded", 0, ini.c_str()) != 0);
 
         // Bounds validation
         if (s.window_w < 640) s.window_w = 1024;
@@ -60,6 +62,7 @@ public:
 
         WritePrivateProfileStringW(L"State", L"GameMode", std::to_wstring(s.game_mode).c_str(), ini.c_str());
         WritePrivateProfileStringW(L"State", L"ColorKu", s.colorku_mode ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"State", L"FilterExcluded", s.filter_excluded ? L"1" : L"0", ini.c_str());
     }
 };
 
