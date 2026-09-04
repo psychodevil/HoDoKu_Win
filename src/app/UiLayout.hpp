@@ -707,9 +707,10 @@ inline HMENU CreateHoDoKuMenuBar() {
     // Mode Menu
     HMENU hMode = CreatePopupMenu();
     AppendMenuW(hMode, MF_STRING, IDM_MODE_PLAYING, L"&Playing Mode\tF2");
-    AppendMenuW(hMode, MF_STRING, IDM_MODE_LEARNING, L"&Learning Mode\tF3");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_LEARNING, L"&Learning Mode (Tutor)\tF3");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_PRACTICING, L"Prac&ticing Mode\tF4");
     AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_CHECK_PROGRESS, L"&Check Progress (Tutor)\tCtrl+T");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CONFIG_TRAINING, L"&Configure Training Techniques...");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hMode, L"&Mode");
 

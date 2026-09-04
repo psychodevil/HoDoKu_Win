@@ -45,3 +45,4 @@ Implement the final remaining solving techniques from original HoDoKu:
 1. Create unit tests in `tests/test_core.cpp` with canonical Empty Rectangle and Grouped AIC puzzles.
 2. Verify FAS step counts include Empty Rectangle and Grouped AIC steps when applicable.
 3. Full engine performance benchmark with AVX2 SIMD candidate scans.
+

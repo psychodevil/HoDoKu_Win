@@ -86,6 +86,7 @@ public:
                 m_filterBivalue = false;
                 recalculate_solution_path();
                 recalculate_fas();
+                update_solution();
                 return;
             }
         }
@@ -127,6 +128,7 @@ public:
         m_redoStack.clear();
         recalculate_solution_path();
         recalculate_fas();
+        update_solution();
     }
 
     void reset_puzzle() {
@@ -198,11 +200,12 @@ public:
         if (m_board.is_given(cell)) return;
 
         push_undo();
-        if (digit == 0) {
+        if (digit == 0 || m_board.get_value(cell) != 0) {
             std::string cur_s;
             for (int i = 0; i < TOTAL_CELLS; ++i) {
-                if (i == cell) cur_s += '.';
-                else {
+                if (i == cell) {
+                    cur_s += (digit == 0) ? '.' : static_cast<char>('0' + digit);
+                } else {
                     uint8_t v = m_board.get_value(i);
                     cur_s += (v == 0) ? '.' : static_cast<char>('0' + v);
                 }
@@ -594,6 +597,53 @@ public:
         m_activeCandidateColor = -1;
         recalculate_solution_path();
         recalculate_fas();
+        update_solution();
+    }
+
+    void update_solution() {
+        m_solution = m_solver.solve_one(m_initialBoard);
+    }
+
+    MoveValidation validate_move(int cell, int digit) {
+        if (digit == 0) return MoveValidation::Valid;
+        if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return MoveValidation::RuleViolation;
+
+        // Check rule violation (house duplicate)
+        for (int peer : GRID.peer_cells[cell]) {
+            if (m_board.get_value(peer) == digit) {
+                return MoveValidation::RuleViolation;
+            }
+        }
+
+        // Check solution deviation
+        if (!m_solution.has_value()) {
+            update_solution();
+        }
+        if (m_solution.has_value()) {
+            if (m_solution->get_value(cell) != digit) {
+                return MoveValidation::SolutionDeviation;
+            }
+        }
+
+        return MoveValidation::Valid;
+    }
+
+    std::vector<int> audit_progress() {
+        std::vector<int> error_cells;
+        if (!m_solution.has_value()) {
+            update_solution();
+        }
+        if (!m_solution.has_value()) return error_cells;
+
+        for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+            uint8_t val = m_board.get_value(cell);
+            if (val != 0 && !m_initialBoard.get_givens().test(cell)) {
+                if (val != m_solution->get_value(cell)) {
+                    error_cells.push_back(cell);
+                }
+            }
+        }
+        return error_cells;
     }
 
     void clear_all_colors() {
@@ -749,6 +799,7 @@ private:
     int m_selectedCell{0};
     BitSet81 m_selectedCells;
     int m_anchorCell{-1};
+    std::optional<BoardState> m_solution;
     int m_hoveredCell{-1};
     int m_hoveredCandidate{0};
     std::optional<Step> m_hoveredStep;

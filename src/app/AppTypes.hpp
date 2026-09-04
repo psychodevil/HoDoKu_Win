@@ -52,6 +52,12 @@ enum class GameMode {
     Practicing = 2
 };
 
+enum class MoveValidation {
+    Valid,
+    RuleViolation,
+    SolutionDeviation
+};
+
 // HoDoKu Color Palette for cell/candidate coloring (10 colors from Options.java)
 static const Color HODOKU_PALETTE[10] = {
     Color(255, 255, 192, 89),  // 0: Orange ('a')
@@ -135,6 +141,7 @@ enum MenuAndControlId {
     IDM_MODE_LEARNING = 9102,
     IDM_MODE_PRACTICING = 9103,
     IDM_MODE_CONFIG_TRAINING = 9104,
+    IDM_MODE_CHECK_PROGRESS = 9105,
 
     // Toolbar Controls
     IDC_BTN_UNDO = 3001,

@@ -16,6 +16,69 @@ using namespace hodoku::ui;
 static std::unique_ptr<HoDoKuStudio> g_studio;
 static GridRenderer g_renderer;
 
+bool TrySetCellDigitWithTutor(HWND hwnd, HoDoKuStudio& studio, int cell, int digit) {
+    if (digit != 0 && studio.get_game_mode() == GameMode::Learning) {
+        auto res = studio.validate_move(cell, digit);
+        if (res == MoveValidation::RuleViolation) {
+            std::wstring msg = L"Tutor Alert: Digit " + std::to_wstring(digit) + 
+                L" at r" + std::to_wstring(cell_row(cell) + 1) + L"c" + std::to_wstring(cell_col(cell) + 1) +
+                L" violates Sudoku rules (duplicate in row, column, or box).\n\nDo you want to enter this digit anyway?";
+            if (MessageBoxW(hwnd, msg.c_str(), L"Tutor Alert - HoDoKu", MB_YESNO | MB_ICONEXCLAMATION) != IDYES) {
+                return false;
+            }
+        } else if (res == MoveValidation::SolutionDeviation) {
+            std::wstring msg = L"Tutor Alert: Digit " + std::to_wstring(digit) + 
+                L" at r" + std::to_wstring(cell_row(cell) + 1) + L"c" + std::to_wstring(cell_col(cell) + 1) +
+                L" deviates from the unique puzzle solution.\n\nDo you want to enter this digit anyway?";
+            if (MessageBoxW(hwnd, msg.c_str(), L"Tutor Alert - HoDoKu", MB_YESNO | MB_ICONWARNING) != IDYES) {
+                return false;
+            }
+        }
+    }
+    studio.set_cell_digit(cell, digit);
+    return true;
+}
+
+bool TrySetDigitAtSelectedWithTutor(HWND hwnd, HoDoKuStudio& studio, int digit) {
+    if (digit != 0 && studio.get_game_mode() == GameMode::Learning) {
+        int cell = studio.get_selected_cell();
+        auto res = studio.validate_move(cell, digit);
+        if (res == MoveValidation::RuleViolation) {
+            std::wstring msg = L"Tutor Alert: Digit " + std::to_wstring(digit) + 
+                L" at r" + std::to_wstring(cell_row(cell) + 1) + L"c" + std::to_wstring(cell_col(cell) + 1) +
+                L" violates Sudoku rules (duplicate in row, column, or box).\n\nDo you want to enter this digit anyway?";
+            if (MessageBoxW(hwnd, msg.c_str(), L"Tutor Alert - HoDoKu", MB_YESNO | MB_ICONEXCLAMATION) != IDYES) {
+                return false;
+            }
+        } else if (res == MoveValidation::SolutionDeviation) {
+            std::wstring msg = L"Tutor Alert: Digit " + std::to_wstring(digit) + 
+                L" at r" + std::to_wstring(cell_row(cell) + 1) + L"c" + std::to_wstring(cell_col(cell) + 1) +
+                L" deviates from the unique puzzle solution.\n\nDo you want to enter this digit anyway?";
+            if (MessageBoxW(hwnd, msg.c_str(), L"Tutor Alert - HoDoKu", MB_YESNO | MB_ICONWARNING) != IDYES) {
+                return false;
+            }
+        }
+    }
+    studio.set_digit_at_selected(digit);
+    return true;
+}
+
+void DoCheckProgress(HWND hwnd, HoDoKuStudio& studio) {
+    auto errors = studio.audit_progress();
+    if (errors.empty()) {
+        MessageBoxW(hwnd, L"Tutor: Excellent! All entries so far match the unique puzzle solution.", L"Check Progress - HoDoKu", MB_OK | MB_ICONINFORMATION);
+    } else {
+        std::wstring msg = L"Tutor: Found " + std::to_wstring(errors.size()) + L" incorrect cell(s).\n\n"
+                           L"The incorrect cells have been selected on the board.";
+        studio.clear_multi_selection();
+        for (int c : errors) studio.add_to_selection(c);
+        if (!errors.empty()) studio.set_selected_cell(errors[0]);
+        UpdateStatusBarText(studio);
+        InvalidateRect(hwnd, NULL, FALSE);
+        MessageBoxW(hwnd, msg.c_str(), L"Check Progress - HoDoKu", MB_OK | MB_ICONWARNING);
+    }
+}
+
 // Global Keystroke Processing (Pre-Filter for 100% Reliable Shortcuts)
 bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
@@ -217,6 +280,10 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return true;
         }
+        if (wParam == 'T') {
+            DoCheckProgress(g_hwnd, *g_studio);
+            return true;
+        }
 
         // Ctrl + 1..9: Toggle candidate in focused cell
         if (wParam >= '1' && wParam <= '9') {
@@ -311,12 +378,13 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     // 4. Digits 1..9 or Numpad 1..9: Set Cell Value
     if (!isCtrl && !isAlt && ((wParam >= '1' && wParam <= '9') || (wParam >= VK_NUMPAD1 && wParam <= VK_NUMPAD9))) {
         int d = (wParam >= '1' && wParam <= '9') ? static_cast<int>(wParam - '0') : static_cast<int>(wParam - VK_NUMPAD1 + 1);
-        g_studio->set_digit_at_selected(d);
-        if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-        else PopulateListView(*g_studio);
-        UpdateHintBoxText(*g_studio);
-        UpdateStatusBarText(*g_studio);
-        InvalidateRect(g_hwnd, NULL, FALSE);
+        if (TrySetDigitAtSelectedWithTutor(g_hwnd, *g_studio, d)) {
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+        }
         return true;
     }
 
@@ -484,8 +552,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 } else if (candDigit > 0 && g_studio->get_board().is_unfilled(cell) &&
                            g_studio->get_board().has_candidate(cell, candDigit)) {
                     // Clicking candidate pencilmark directly sets cell value
-                    g_studio->set_cell_digit(cell, candDigit);
-                    g_studio->set_selected_cell(cell);
+                    if (TrySetCellDigitWithTutor(hwnd, *g_studio, cell, candDigit)) {
+                        g_studio->set_selected_cell(cell);
+                    }
                 } else {
                     g_studio->set_selected_cell(cell);
                 }
@@ -656,6 +725,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             UpdateStatusBarText(*g_studio);
             UpdateHintBoxText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_CHECK_PROGRESS) {
+            DoCheckProgress(hwnd, *g_studio);
         } else if (id == IDM_FILE_COPY_GIVENS) {
             SetClipboardText(hwnd, g_studio->export_givens_string());
         } else if (id == IDM_FILE_COPY_PM) {
@@ -694,10 +765,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         // Active Cell Panel: Set Value Buttons
         if (id >= IDC_ZOOM_SET_BASE + 1 && id <= IDC_ZOOM_SET_BASE + 9) {
             int d = id - IDC_ZOOM_SET_BASE;
-            g_studio->set_digit_at_selected(d);
-            UpdateActiveCellPanel(*g_studio);
-            UpdateStatusBarText(*g_studio);
-            InvalidateRect(hwnd, NULL, FALSE);
+            if (TrySetDigitAtSelectedWithTutor(hwnd, *g_studio, d)) {
+                UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
         }
 
         // Active Cell Panel: Toggle Candidate Buttons

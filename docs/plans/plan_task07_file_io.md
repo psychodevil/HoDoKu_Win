@@ -56,3 +56,4 @@ Provide native file loading and saving capabilities matching original HoDoKu (v2
 1. Automated tests loading sample `.sdk`, `.ss`, `.hsol`, and `.txt` files from disk.
 2. Verified round-trip saving and re-loading identical givens and board state.
 3. Clean error handling on corrupted/truncated files without application crash.
+

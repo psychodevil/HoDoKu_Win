@@ -51,3 +51,4 @@ Replicate HoDoKu's interactive **Tutor / Learning Mode**:
 1. Test entering wrong values in Learning Mode -> Verify Tutor alert triggers.
 2. Test entering correct values -> Verify silent acceptance without intrusive dialogs.
 3. Test Playing Mode -> Verify Tutor remains silent (no alerts in Playing mode).
+

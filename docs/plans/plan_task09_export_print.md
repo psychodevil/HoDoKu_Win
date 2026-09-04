@@ -46,3 +46,4 @@ Provide graphical export and printing capabilities matching original HoDoKu (v2.
 1. Trigger `Export -> PNG Image` -> Verify clean, high-resolution PNG generated and viewable in Windows Photos.
 2. Verify ColorKu mode exports authentic 3D marbles.
 3. Test print dialog integration with "Microsoft Print to PDF".
+

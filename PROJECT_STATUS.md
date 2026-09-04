@@ -7,8 +7,8 @@
 ## 1. Executive Summary & Progress Dashboard
 
 ```
-Overall Project Completion: [███████████████████░] 93.5%
-Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░░░█] 6.5%
+Overall Project Completion: [███████████████████▉] 96.0%
+Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░░░▏] 4.0%
 ```
 
 | Milestone / Task Domain | Status | Weight | Progress | Contribution | Plan Link |
@@ -20,10 +20,10 @@ Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░
 | **Phase 5: Visual Fidelity & Filters** | Completed | 7.0% | 100% | +7.0% | [Phase 5: Visual Parity](#phase-5-authentic-styling-colorku--dual-filter) |
 | **Phase 6: Multi-Selection & Editing** | Completed | 3.0% | 100% | +3.0% | [Phase 6: Multi-Selection](#phase-6-ctrlshift-multi-selection--batch-actions) |
 | **Phase 7: Native File I/O & Formats** | Completed | 3.5% | 100% | +3.5% | [Phase 7: File I/O](#phase-7-native-file-io--formats-sdk-ss-hsol) |
-| **Task 8: Learning Mode (Tutor)** | Pending | 2.5% | 0% | +2.5% | [Plan: Task 8 Tutor Mode](docs/plans/plan_task08_tutor_mode.md) |
+| **Phase 8: Learning Mode (Tutor)** | Completed | 2.5% | 100% | +2.5% | [Phase 8: Tutor Mode](#phase-8-learning-mode-tutor-interactive-alerts--validator) |
 | **Task 9: Image Export & Print** | Pending | 2.0% | 0% | +2.0% | [Plan: Task 9 Export & Print](docs/plans/plan_task09_export_print.md) |
 | **Task 10: Advanced Solver Patterns** | Pending | 2.0% | 0% | +2.0% | [Plan: Task 10 Advanced Patterns](docs/plans/plan_task10_advanced_patterns.md) |
-| **TOTAL** | | **100.0%** | | **93.5% Done** | *(6.5% Remaining)* |
+| **TOTAL** | | **100.0%** | | **96.0% Done** | *(4.0% Remaining)* |
 
 ---
 
@@ -92,13 +92,19 @@ Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░
   * Support for standard Sudoku formats: `.sdk`, `.ss` (Simple Sudoku with `I` and `E` records), `.hsol` (HoDoKu Solution archive), and plain 81-character text.
   * `File -> Save` (`Ctrl+S`) and `File -> Save As...` (`Ctrl+Shift+S`) with automatic format detection.
 
+### Phase 8: Learning Mode (Tutor) Interactive Alerts & Validator
+* **Completion Contribution:** **+2.5%**
+* **Delivered Capabilities:**
+  * Real-time validation of every user entry when playing in Learning Mode (`F3`).
+  * Instant alert dialogs for house rule violations (row, column, box duplicates) and deviations from the unique puzzle solution.
+  * `Mode -> Check Progress (Tutor)` (`Ctrl+T`) auditing user progress and highlighting incorrect cells.
+
 ---
 
-## 3. Remaining Tasks Roadmap (6.5% to 1:1 Parity)
+## 3. Remaining Tasks Roadmap (4.0% to 1:1 Parity)
 
 | Task ID | Component & Description | Contribution | Plan Document | Status |
 | :---: | :--- | :---: | :---: | :---: |
-| **TASK-08** | **Learning Mode (Tutor) Interactive Alerts**<br/>Real-time violation detection, deviation from unique solution warnings, "Check progress". | **+2.5%** | [plan_task08_tutor_mode.md](docs/plans/plan_task08_tutor_mode.md) | Ready for Execution |
 | **TASK-09** | **Image Export & Print System**<br/>`File -> Export -> PNG Image`, GDI printing & page setup for physical printing. | **+2.0%** | [plan_task09_export_print.md](docs/plans/plan_task09_export_print.md) | Ready for Execution |
 | **TASK-10** | **Advanced Solver Patterns (Edge Cases)**<br/>Empty Rectangle (ER), Dual Empty Rectangle, Grouped Alternating Inference Chains (AIC). | **+2.0%** | [plan_task10_advanced_patterns.md](docs/plans/plan_task10_advanced_patterns.md) | Ready for Execution |
 
