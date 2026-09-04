@@ -22,12 +22,24 @@ include_directories(src)
 add_library(hodoku_core INTERFACE)
 target_include_directories(hodoku_core INTERFACE src)
 
-# Test Suite Executable
+# Test Suite Executables
 add_executable(test_core tests/test_core.cpp)
 target_link_libraries(test_core PRIVATE hodoku_core)
 
+if(WIN32)
+    add_executable(test_file_io tests/test_file_io.cpp)
+    target_link_libraries(test_file_io PRIVATE hodoku_core gdiplus comctl32 gdi32 user32 comdlg32)
+
+    add_executable(test_tutor tests/test_tutor.cpp)
+    target_link_libraries(test_tutor PRIVATE hodoku_core gdiplus comctl32 gdi32 user32 comdlg32)
+endif()
+
 enable_testing()
 add_test(NAME CoreEngineTests COMMAND test_core)
+if(WIN32)
+    add_test(NAME FileIoTests COMMAND test_file_io)
+    add_test(NAME TutorTests COMMAND test_tutor)
+endif()
 
 # Native Windows GUI Executable
 if(WIN32)
