@@ -721,6 +721,9 @@ public:
     const std::vector<TechniqueType>& get_training_techniques() const { return m_trainingTechniques; }
     void set_training_techniques(const std::vector<TechniqueType>& techs) { m_trainingTechniques = techs; }
 
+    const std::wstring& get_current_file_path() const { return m_currentFilePath; }
+    void set_current_file_path(std::wstring p) { m_currentFilePath = std::move(p); }
+
     const std::vector<Step>& get_solution_path() const { return m_solutionPath; }
     const std::vector<Step>& get_fas_steps() const { return m_fasSteps; }
     const BoardState& get_board() const { return m_board; }
@@ -758,6 +761,7 @@ private:
     DifficultyLevel m_hardestLevel{DifficultyLevel::Easy};
     std::vector<Savepoint> m_savepoints;
     bool m_colorKuMode{false};
+    std::wstring m_currentFilePath;
 
     std::vector<TechniqueType> m_trainingTechniques;
 

@@ -677,7 +677,8 @@ inline HMENU CreateHoDoKuMenuBar() {
     HMENU hFile = CreatePopupMenu();
     AppendMenuW(hFile, MF_STRING, IDM_FILE_NEW, L"&New Random Sudoku\tCtrl+N");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_OPEN, L"&Open...\tCtrl+O");
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE, L"&Save...\tCtrl+S");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE, L"&Save\tCtrl+S");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE_AS, L"Save &As...\tCtrl+Shift+S");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_EXPORT_PNG, L"&Export Board Image (PNG)...");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SET_GIVENS, L"&Set Givens...\tCtrl+G");

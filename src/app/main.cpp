@@ -178,7 +178,11 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             return true;
         }
         if (wParam == 'S') {
-            DoFileSave(g_hwnd, *g_studio);
+            if (isShift) {
+                DoFileSaveAs(g_hwnd, *g_studio);
+            } else {
+                DoFileSave(g_hwnd, *g_studio);
+            }
             return true;
         }
         if (wParam == 'P') {
@@ -610,6 +614,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             DoFileOpen(hwnd, *g_studio);
         } else if (id == IDM_FILE_SAVE) {
             DoFileSave(hwnd, *g_studio);
+        } else if (id == IDM_FILE_SAVE_AS) {
+            DoFileSaveAs(hwnd, *g_studio);
         } else if (id == IDM_FILE_EXPORT_PNG) {
             DoExportPng(hwnd, *g_studio);
         } else if (id == IDM_EDIT_ADD_SAVEPOINT) {

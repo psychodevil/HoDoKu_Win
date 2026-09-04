@@ -2,6 +2,7 @@
 
 #include "AppTypes.hpp"
 #include "StudioModel.hpp"
+#include "FileManager.hpp"
 #include <fstream>
 #include <functional>
 
@@ -49,36 +50,61 @@ inline void DoFileOpen(HWND hwnd, HoDoKuStudio& studio) {
     OPENFILENAMEW ofn = {};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = hwnd;
-    ofn.lpstrFilter = L"Sudoku Files (*.txt;*.ss;*.hsol)\0*.txt;*.ss;*.hsol\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFilter = L"All Supported Sudoku Files (*.sdk;*.ss;*.hsol;*.txt)\0*.sdk;*.ss;*.hsol;*.txt\0Sudoku (*.sdk)\0*.sdk\0Simple Sudoku (*.ss)\0*.ss\0HoDoKu Solution (*.hsol)\0*.hsol\0Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
     if (GetOpenFileNameW(&ofn)) {
-        std::ifstream f(szFile);
-        if (f.is_open()) {
-            std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-            if (!content.empty()) {
-                studio.import_from_string(content);
-                if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
-                InvalidateRect(hwnd, NULL, FALSE);
-            }
+        std::string err;
+        if (FileManager::load_file(szFile, studio, err)) {
+            if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else {
+            std::wstring wErr(err.begin(), err.end());
+            MessageBoxW(hwnd, wErr.c_str(), L"Error Opening File", MB_OK | MB_ICONERROR);
         }
     }
 }
 
-inline void DoFileSave(HWND hwnd, const HoDoKuStudio& studio) {
-    wchar_t szFile[MAX_PATH] = L"sudoku.txt";
+inline void DoFileSaveAs(HWND hwnd, HoDoKuStudio& studio) {
+    wchar_t szFile[MAX_PATH] = L"sudoku.sdk";
+    if (!studio.get_current_file_path().empty()) {
+        wcsncpy_s(szFile, studio.get_current_file_path().c_str(), MAX_PATH);
+    }
     OPENFILENAMEW ofn = {};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = hwnd;
-    ofn.lpstrFilter = L"Text Sudoku (*.txt)\0*.txt\0Simple Sudoku (*.ss)\0*.ss\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFilter = L"Sudoku (*.sdk)\0*.sdk\0Simple Sudoku (*.ss)\0*.ss\0HoDoKu Solution (*.hsol)\0*.hsol\0Text Sudoku (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_OVERWRITEPROMPT;
     if (GetSaveFileNameW(&ofn)) {
-        std::ofstream f(szFile);
-        if (f.is_open()) {
-            f << studio.export_givens_string() << "\n";
+        FileFormat fmt = FileFormat::Auto;
+        if (ofn.nFilterIndex == 1) fmt = FileFormat::Sdk;
+        else if (ofn.nFilterIndex == 2) fmt = FileFormat::SimpleSudoku;
+        else if (ofn.nFilterIndex == 3) fmt = FileFormat::HoDoKuSolution;
+        else if (ofn.nFilterIndex == 4) fmt = FileFormat::PlainText;
+
+        std::string err;
+        if (FileManager::save_file(szFile, studio, fmt, err)) {
+            MessageBoxW(hwnd, L"Puzzle successfully saved!", L"Save - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        } else {
+            std::wstring wErr(err.begin(), err.end());
+            MessageBoxW(hwnd, wErr.c_str(), L"Error Saving File", MB_OK | MB_ICONERROR);
+        }
+    }
+}
+
+inline void DoFileSave(HWND hwnd, HoDoKuStudio& studio) {
+    if (studio.get_current_file_path().empty()) {
+        DoFileSaveAs(hwnd, studio);
+    } else {
+        std::string err;
+        if (FileManager::save_file(studio.get_current_file_path(), studio, FileFormat::Auto, err)) {
+            MessageBoxW(hwnd, L"Puzzle successfully saved!", L"Save - HoDoKu", MB_OK | MB_ICONINFORMATION);
+        } else {
+            std::wstring wErr(err.begin(), err.end());
+            MessageBoxW(hwnd, wErr.c_str(), L"Error Saving File", MB_OK | MB_ICONERROR);
         }
     }
 }
