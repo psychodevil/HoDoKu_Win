@@ -23,6 +23,19 @@ Thumbs.db
 *.pdb
 *.ilk
 *.idb
+*.tlog
+*.suo
+*.user
+*.VC.db
+*.opendb
+
+# Runtime and resource files
+*.ini
+*.res
+
+# Build tool caches
+compile_commands.json
+.cache/
 
 # Log files
 *.log
