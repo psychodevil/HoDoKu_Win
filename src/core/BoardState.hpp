@@ -103,23 +103,21 @@ public:
 
     [[nodiscard]] BitSet81 get_cells_with_candidate(int digit) const noexcept {
 #if defined(__AVX2__)
-        if (!std::is_constant_evaluated()) {
-            __m256i tgt = _mm256_set1_epi16(static_cast<short>(digit_to_mask(digit)));
-            const __m256i* ptr = reinterpret_cast<const __m256i*>(m_candidates.data());
+        __m256i tgt = _mm256_set1_epi16(static_cast<short>(digit_to_mask(digit)));
+        const __m256i* ptr = reinterpret_cast<const __m256i*>(m_candidates.data());
 
-            uint64_t m0 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 0), tgt), tgt));
-            uint64_t m1 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 1), tgt), tgt));
-            uint64_t m2 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 2), tgt), tgt));
-            uint64_t m3 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 3), tgt), tgt));
-            uint64_t lo_bits = m0 | (m1 << 16) | (m2 << 32) | (m3 << 48);
+        uint64_t m0 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 0), tgt), tgt));
+        uint64_t m1 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 1), tgt), tgt));
+        uint64_t m2 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 2), tgt), tgt));
+        uint64_t m3 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 3), tgt), tgt));
+        uint64_t lo_bits = m0 | (m1 << 16) | (m2 << 32) | (m3 << 48);
 
-            uint64_t m4 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 4), tgt), tgt));
-            uint64_t m5 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 5), tgt), tgt));
-            uint64_t hi_bits = (m4 | (m5 << 16)) & BitSet81::HI_MASK;
+        uint64_t m4 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 4), tgt), tgt));
+        uint64_t m5 = extract_mask16(_mm256_cmpeq_epi16(_mm256_and_si256(_mm256_load_si256(ptr + 5), tgt), tgt));
+        uint64_t hi_bits = (m4 | (m5 << 16)) & BitSet81::HI_MASK;
 
-            return BitSet81(lo_bits, hi_bits) & m_unfilled_cells;
-        }
-#endif
+        return BitSet81(lo_bits, hi_bits) & m_unfilled_cells;
+#else
         BitSet81 result;
         CandidateMask target = digit_to_mask(digit);
         m_unfilled_cells.for_each_cell([&](int cell) {
@@ -128,6 +126,7 @@ public:
             }
         });
         return result;
+#endif
     }
 
     [[nodiscard]] BitSet81 get_candidates_in_house(int house_idx, int digit) const noexcept {

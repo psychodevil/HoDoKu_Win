@@ -42,7 +42,7 @@ public:
                 std::vector<int> comp_color0;
                 std::vector<int> comp_color1;
                 bool is_bipartite = true;
-                int conflict_u = -1, conflict_v = -1;
+                int conflict_u = -1;
 
                 std::queue<int> q;
                 visited[start_node] = true;
@@ -64,7 +64,6 @@ public:
                         } else if (color[v] == color[u]) {
                             is_bipartite = false;
                             conflict_u = u;
-                            conflict_v = v;
                         }
                     }
                 }

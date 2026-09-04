@@ -6,8 +6,10 @@
 #include "CommandLine.hpp"
 #include "Settings.hpp"
 
+#if defined(_MSC_VER)
 #pragma comment(lib, "gdiplus.lib")
 #pragma comment(lib, "comctl32.lib")
+#endif
 
 using namespace Gdiplus;
 using namespace hodoku::core;

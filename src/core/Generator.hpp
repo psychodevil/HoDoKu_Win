@@ -208,7 +208,6 @@ public:
     BoardState generate_puzzle(DifficultyLevel target_level, SymmetryType symmetry = SymmetryType::Rotational180, int max_attempts = 15) {
         BoardState best_puzzle;
         DifficultyLevel best_level = DifficultyLevel::Easy;
-        int best_score = 0;
 
         for (int attempt = 0; attempt < max_attempts; ++attempt) {
             BoardState full = generate_terminal_grid();
@@ -233,7 +232,6 @@ public:
                                 std::abs(static_cast<int>(best_level) - static_cast<int>(target_level))) {
                 best_puzzle = puzzle;
                 best_level = lvl;
-                best_score = score;
             }
         }
 
