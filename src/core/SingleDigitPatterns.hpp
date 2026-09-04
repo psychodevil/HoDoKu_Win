@@ -372,14 +372,16 @@ public:
                                     int target = cell_index(actLine, erCol);
                                     if (cell_box(target) != b && board.is_unfilled(target) && board.has_candidate(target, d)) {
                                         Step step;
-                                        step.type = TechniqueType::Custom;
+                                        step.type = TechniqueType::EmptyRectangle;
                                         step.name = "Empty Rectangle";
                                         step.difficulty = DifficultyLevel::Hard;
                                         step.score = 120;
                                         step.primary_cells = box_cands;
                                         step.primary_cells.set(cell1);
                                         step.primary_cells.set(cell2);
+                                        step.secondary_cells = box_cands;
                                         step.eliminations.push_back({target, d});
+                                        step.links.push_back({cell1, d, cell2, d, true});
 
                                         step.explanation = "Empty Rectangle on digit " + std::to_string(d) +
                                                           " in box " + std::to_string(b + 1) +
@@ -408,14 +410,16 @@ public:
                                     int target = cell_index(erLine, actCol);
                                     if (cell_box(target) != b && board.is_unfilled(target) && board.has_candidate(target, d)) {
                                         Step step;
-                                        step.type = TechniqueType::Custom;
+                                        step.type = TechniqueType::EmptyRectangle;
                                         step.name = "Empty Rectangle";
                                         step.difficulty = DifficultyLevel::Hard;
                                         step.score = 120;
                                         step.primary_cells = box_cands;
                                         step.primary_cells.set(cell1);
                                         step.primary_cells.set(cell2);
+                                        step.secondary_cells = box_cands;
                                         step.eliminations.push_back({target, d});
+                                        step.links.push_back({cell1, d, cell2, d, true});
 
                                         step.explanation = "Empty Rectangle on digit " + std::to_string(d) +
                                                           " in box " + std::to_string(b + 1) +
@@ -433,6 +437,45 @@ public:
         }
 
         return steps;
+    }
+
+    // 5. Dual Empty Rectangle (Hard, Score: 140)
+    // Matches HoDoKu SingleDigitPatternSolver.java lines 441-487
+    static std::vector<Step> find_dual_empty_rectangles(const BoardState& board) {
+        auto ers = find_empty_rectangles(board);
+        std::vector<Step> duals;
+        size_t n = ers.size();
+        for (size_t i = 0; i < n; ++i) {
+            for (size_t j = i + 1; j < n; ++j) {
+                const auto& s1 = ers[i];
+                const auto& s2 = ers[j];
+                if (s1.eliminations.empty() || s2.eliminations.empty()) continue;
+                if (s1.eliminations[0].digit != s2.eliminations[0].digit) continue;
+                if (s1.eliminations[0].cell == s2.eliminations[0].cell) continue;
+
+                // Box candidates must match exactly
+                if (s1.secondary_cells == s2.secondary_cells) {
+                    Step dual;
+                    dual.type = TechniqueType::DualEmptyRectangle;
+                    dual.name = "Dual Empty Rectangle";
+                    dual.difficulty = DifficultyLevel::Hard;
+                    dual.score = 140;
+                    dual.primary_cells = s1.primary_cells | s2.primary_cells;
+                    dual.secondary_cells = s1.secondary_cells;
+                    dual.eliminations = {s1.eliminations[0], s2.eliminations[0]};
+                    dual.links = s1.links;
+                    dual.links.insert(dual.links.end(), s2.links.begin(), s2.links.end());
+
+                    int d = s1.eliminations[0].digit;
+                    int b = cell_box(s1.secondary_cells.first_cell());
+                    dual.explanation = "Dual Empty Rectangle on digit " + std::to_string(d) +
+                                      " in box " + std::to_string(b + 1) +
+                                      " eliminates digit " + std::to_string(d) + " at multiple cells.";
+                    duals.push_back(dual);
+                }
+            }
+        }
+        return duals;
     }
 };
 

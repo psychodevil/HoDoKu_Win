@@ -25,6 +25,8 @@ enum class TechniqueType {
     Skyscraper,
     TwoStringKite,
     TurbotFish,
+    EmptyRectangle,
+    DualEmptyRectangle,
     SimpleColoring,
     SimpleColors,
     MultiColors1,
@@ -37,6 +39,7 @@ enum class TechniqueType {
     AvoidableRectangle,
     BUG,
     RemotePair,
+    GroupedAIC,
     AlsXz,
     SueDeCoq,
     DeathBlossom,
@@ -65,6 +68,8 @@ inline std::string technique_name(TechniqueType t) {
         case TechniqueType::Skyscraper: return "Skyscraper";
         case TechniqueType::TwoStringKite: return "2-String Kite";
         case TechniqueType::TurbotFish: return "Turbot Fish";
+        case TechniqueType::EmptyRectangle: return "Empty Rectangle";
+        case TechniqueType::DualEmptyRectangle: return "Dual Empty Rectangle";
         case TechniqueType::SimpleColoring: return "Simple Coloring";
         case TechniqueType::SimpleColors: return "Simple Colors";
         case TechniqueType::MultiColors1: return "Multi-Colors Type 1";
@@ -77,6 +82,7 @@ inline std::string technique_name(TechniqueType t) {
         case TechniqueType::AvoidableRectangle: return "Avoidable Rectangle";
         case TechniqueType::BUG: return "Bivalue Universal Grave +1";
         case TechniqueType::RemotePair: return "Remote Pair";
+        case TechniqueType::GroupedAIC: return "Grouped AIC";
         case TechniqueType::AlsXz: return "Almost Locked Set XZ";
         case TechniqueType::SueDeCoq: return "Sue de Coq";
         case TechniqueType::DeathBlossom: return "Death Blossom";

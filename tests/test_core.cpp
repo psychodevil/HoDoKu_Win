@@ -407,6 +407,125 @@ void test_uniqueness() {
     std::cout << "\n[TEST] Complete Uniqueness Techniques Suite... PASSED\n";
 }
 
+void test_advanced_patterns() {
+    std::cout << "\n[TEST] Advanced Solver Patterns (Empty Rectangle, Dual ER, Grouped AIC)...";
+
+    // 1. Synthesize Empty Rectangle:
+    // Box 0 (r0-2, c0-2): candidates for digit 5 form a cross at r1, c1
+    // Box 0 cands: r1c0, r1c1, r0c1, r2c1
+    BoardState b;
+    for (int i = 0; i < TOTAL_CELLS; ++i) b.set_candidates(i, 0);
+    int r1c0 = cell_index(1, 0);
+    int r1c1 = cell_index(1, 1);
+    int r0c1 = cell_index(0, 1);
+    int r2c1 = cell_index(2, 1);
+
+    b.set_candidates(r1c0, digit_to_mask(5) | digit_to_mask(1));
+    b.set_candidates(r1c1, digit_to_mask(5) | digit_to_mask(2));
+    b.set_candidates(r0c1, digit_to_mask(5) | digit_to_mask(3));
+    b.set_candidates(r2c1, digit_to_mask(5) | digit_to_mask(4));
+
+    // Conjugate pair in Column 5: r1c5 and r7c5
+    int r1c5 = cell_index(1, 5);
+    int r7c5 = cell_index(7, 5);
+    b.set_candidates(r1c5, digit_to_mask(5) | digit_to_mask(6));
+    b.set_candidates(r7c5, digit_to_mask(5) | digit_to_mask(7));
+
+    // Target elimination: r7c1 has candidate 5
+    int r7c1 = cell_index(7, 1);
+    b.set_candidates(r7c1, digit_to_mask(5) | digit_to_mask(8));
+
+    auto er_steps = SingleDigitPatterns::find_empty_rectangles(b);
+    assert(!er_steps.empty());
+    bool found_er = false;
+    for (const auto& s : er_steps) {
+        if (s.type == TechniqueType::EmptyRectangle) {
+            for (const auto& e : s.eliminations) {
+                if (e.cell == r7c1 && e.digit == 5) {
+                    found_er = true;
+                    break;
+                }
+            }
+        }
+    }
+    assert(found_er);
+    std::cout << "\n  -> Empty Rectangle (ER) detection: PASSED";
+
+    // 2. Synthesize Dual Empty Rectangle:
+    // Add second conjugate pair in Column 7: r1c7 and r4c7
+    int r1c7 = cell_index(1, 7);
+    int r4c7 = cell_index(4, 7);
+    b.set_candidates(r1c7, digit_to_mask(5) | digit_to_mask(8));
+    b.set_candidates(r4c7, digit_to_mask(5) | digit_to_mask(9));
+
+    // Second elimination: r4c1 has candidate 5
+    int r4c1 = cell_index(4, 1);
+    b.set_candidates(r4c1, digit_to_mask(5) | digit_to_mask(2));
+
+    auto der_steps = SingleDigitPatterns::find_dual_empty_rectangles(b);
+    assert(!der_steps.empty());
+    bool found_der = false;
+    for (const auto& s : der_steps) {
+        if (s.type == TechniqueType::DualEmptyRectangle && s.eliminations.size() == 2) {
+            bool has_e1 = (s.eliminations[0].cell == r7c1 || s.eliminations[1].cell == r7c1);
+            bool has_e2 = (s.eliminations[0].cell == r4c1 || s.eliminations[1].cell == r4c1);
+            if (has_e1 && has_e2) {
+                found_der = true;
+                break;
+            }
+        }
+    }
+    assert(found_der);
+    std::cout << "\n  -> Dual Empty Rectangle (Dual ER) detection: PASSED";
+
+    // 3. Synthesize Grouped AIC:
+    // Digit 3 in Box 0: group node at r0c0 and r0c1 (in row 0, box 0)
+    BoardState bg;
+    for (int i = 0; i < TOTAL_CELLS; ++i) bg.set_candidates(i, 0);
+    int g_r0c0 = cell_index(0, 0);
+    int g_r0c1 = cell_index(0, 1);
+    int g_r0c8 = cell_index(0, 8);
+    int g_r6c8 = cell_index(6, 8);
+    int g_r6c1 = cell_index(6, 1);
+    int g_target = cell_index(2, 1); // Sees GroupNode in Box 0 and sees r6c1 in Column 1
+
+    bg.set_candidates(g_r0c0, digit_to_mask(3) | digit_to_mask(1));
+    bg.set_candidates(g_r0c1, digit_to_mask(3) | digit_to_mask(2));
+    // Additional candidate in Box 0 outside row 0 so group is valid
+    int g_r2c2 = cell_index(2, 2);
+    bg.set_candidates(g_r2c2, digit_to_mask(3) | digit_to_mask(7));
+
+    // Strong link in Row 0: GroupNode (r0c0, r0c1) = r0c8
+    bg.set_candidates(g_r0c8, digit_to_mask(3) | digit_to_mask(4));
+
+    // Strong link in Col 8: r0c8 = r6c8
+    bg.set_candidates(g_r6c8, digit_to_mask(3) | digit_to_mask(5));
+
+    // Strong link in Row 6: r6c8 = r6c1
+    bg.set_candidates(g_r6c1, digit_to_mask(3) | digit_to_mask(6));
+
+    // Target cell has candidate 3
+    bg.set_candidates(g_target, digit_to_mask(3) | digit_to_mask(9));
+
+    auto gaic_steps = Chains::find_grouped_aic(bg);
+    assert(!gaic_steps.empty());
+    bool found_gaic = false;
+    for (const auto& s : gaic_steps) {
+        if (s.type == TechniqueType::GroupedAIC) {
+            for (const auto& e : s.eliminations) {
+                if (e.cell == g_target && e.digit == 3) {
+                    found_gaic = true;
+                    break;
+                }
+            }
+        }
+    }
+    assert(found_gaic);
+    std::cout << "\n  -> Grouped AIC (Alternating Inference Chains) detection: PASSED";
+
+    std::cout << "\n[TEST] Advanced Solver Patterns (ER, Dual ER, Grouped AIC)... PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -420,6 +539,7 @@ int main() {
     test_dlx_solver();
     test_advanced_techniques();
     test_uniqueness();
+    test_advanced_patterns();
     test_generator();
 
     auto end = std::chrono::high_resolution_clock::now();

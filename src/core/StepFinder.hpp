@@ -79,6 +79,9 @@ public:
         auto er = SingleDigitPatterns::find_empty_rectangles(board);
         if (!er.empty()) return er.front();
 
+        auto der = SingleDigitPatterns::find_dual_empty_rectangles(board);
+        if (!der.empty()) return der.front();
+
         // 6. Wings
         auto xy = Wings::find_xy_wings(board);
         if (!xy.empty()) return xy.front();
@@ -116,6 +119,9 @@ public:
 
         auto xyc = Chains::find_xy_chains(board);
         if (!xyc.empty()) return xyc.front();
+
+        auto gaic = Chains::find_grouped_aic(board);
+        if (!gaic.empty()) return gaic.front();
 
         // 11. Almost Locked Sets & Miscellaneous
         auto als = AlmostLockedSets::find_als_xz(board);
@@ -197,6 +203,7 @@ public:
         append(SingleDigitPatterns::find_two_string_kites(board));
         append(SingleDigitPatterns::find_turbot_fish(board));
         append(SingleDigitPatterns::find_empty_rectangles(board));
+        append(SingleDigitPatterns::find_dual_empty_rectangles(board));
         append(Wings::find_xy_wings(board));
         append(Wings::find_xyz_wings(board));
         append(Wings::find_w_wings(board));
@@ -208,6 +215,7 @@ public:
         append(MultiColors::find_multi_colors(board));
         append(Chains::find_remote_pairs(board));
         append(Chains::find_xy_chains(board));
+        append(Chains::find_grouped_aic(board));
         append(AlmostLockedSets::find_als_xz(board));
         append(SueDeCoq::find_sue_de_coq(board));
         append(FrankenMutantFish::find_franken_fish(board));
