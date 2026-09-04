@@ -7,8 +7,8 @@
 ## 1. Executive Summary & Progress Dashboard
 
 ```
-Overall Project Completion: [███████████████████▉] 96.0%
-Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░░░▏] 4.0%
+Overall Project Completion: [███████████████████▉] 98.0%
+Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░░░▏] 2.0%
 ```
 
 | Milestone / Task Domain | Status | Weight | Progress | Contribution | Plan Link |
@@ -21,13 +21,13 @@ Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░
 | **Phase 6: Multi-Selection & Editing** | Completed | 3.0% | 100% | +3.0% | [Phase 6: Multi-Selection](#phase-6-ctrlshift-multi-selection--batch-actions) |
 | **Phase 7: Native File I/O & Formats** | Completed | 3.5% | 100% | +3.5% | [Phase 7: File I/O](#phase-7-native-file-io--formats-sdk-ss-hsol) |
 | **Phase 8: Learning Mode (Tutor)** | Completed | 2.5% | 100% | +2.5% | [Phase 8: Tutor Mode](#phase-8-learning-mode-tutor-interactive-alerts--validator) |
-| **Task 9: Image Export & Print** | Pending | 2.0% | 0% | +2.0% | [Plan: Task 9 Export & Print](docs/plans/plan_task09_export_print.md) |
+| **Phase 9: Image Export & Print** | Completed | 2.0% | 100% | +2.0% | [Phase 9: Export & Print](#phase-9-image-export--native-gdi-printing) |
 | **Task 10: Advanced Solver Patterns** | Pending | 2.0% | 0% | +2.0% | [Plan: Task 10 Advanced Patterns](docs/plans/plan_task10_advanced_patterns.md) |
-| **TOTAL** | | **100.0%** | | **96.0% Done** | *(4.0% Remaining)* |
+| **TOTAL** | | **100.0%** | | **98.0% Done** | *(2.0% Remaining)* |
 
 ---
 
-## 2. Completed Milestones (90.0% Complete)
+## 2. Completed Milestones (98.0% Complete)
 
 ### Phase 1: Core Engine & AVX2 SIMD Acceleration
 * **Completion Contribution:** **+25.0%**
@@ -99,13 +99,18 @@ Remaining to 1:1 Parity:    [░░░░░░░░░░░░░░░░░
   * Instant alert dialogs for house rule violations (row, column, box duplicates) and deviations from the unique puzzle solution.
   * `Mode -> Check Progress (Tutor)` (`Ctrl+T`) auditing user progress and highlighting incorrect cells.
 
+### Phase 9: Image Export & Native GDI Printing
+* **Completion Contribution:** **+2.0%**
+* **Delivered Capabilities:**
+  * `File -> Export Board Image (PNG)...`: Generates crystal-clear, high-resolution 1080×1080 board renders with givens, active candidates, step markers, and ColorKu marbles.
+  * `File -> Print Puzzle...` (`Ctrl+P`): Native Win32 GDI page setup and printer dialog (`PrintDlgW`) with headers (puzzle difficulty, score, clues), anti-aliased vector grid scaling, and margin control.
+
 ---
 
-## 3. Remaining Tasks Roadmap (4.0% to 1:1 Parity)
+## 3. Remaining Tasks Roadmap (2.0% to 1:1 Parity)
 
 | Task ID | Component & Description | Contribution | Plan Document | Status |
 | :---: | :--- | :---: | :---: | :---: |
-| **TASK-09** | **Image Export & Print System**<br/>`File -> Export -> PNG Image`, GDI printing & page setup for physical printing. | **+2.0%** | [plan_task09_export_print.md](docs/plans/plan_task09_export_print.md) | Ready for Execution |
 | **TASK-10** | **Advanced Solver Patterns (Edge Cases)**<br/>Empty Rectangle (ER), Dual Empty Rectangle, Grouped Alternating Inference Chains (AIC). | **+2.0%** | [plan_task10_advanced_patterns.md](docs/plans/plan_task10_advanced_patterns.md) | Ready for Execution |
 
 ---

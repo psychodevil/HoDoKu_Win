@@ -322,8 +322,8 @@ inline void DoExportPng(HWND hwnd, const HoDoKuStudio& studio) {
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_OVERWRITEPROMPT;
     if (GetSaveFileNameW(&ofn)) {
-        const int imgW = 600;
-        const int imgH = 600;
+        const int imgW = 1080;
+        const int imgH = 1080;
         Gdiplus::Bitmap bmp(imgW, imgH, PixelFormat32bppARGB);
         Gdiplus::Graphics g(&bmp);
         g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -335,10 +335,78 @@ inline void DoExportPng(HWND hwnd, const HoDoKuStudio& studio) {
         CLSID clsidPng = { 0x557cf406, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e } };
         Gdiplus::Status st = bmp.Save(szFile, &clsidPng, NULL);
         if (st == Gdiplus::Ok) {
-            MessageBoxW(hwnd, L"Sudoku board successfully exported to PNG image!", L"Export PNG - HoDoKu", MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(hwnd, L"Sudoku board successfully exported to high-resolution PNG image (1080x1080)!", L"Export PNG - HoDoKu", MB_OK | MB_ICONINFORMATION);
         } else {
             MessageBoxW(hwnd, L"Failed to export board to PNG image.", L"Export Error", MB_OK | MB_ICONERROR);
         }
+    }
+}
+
+inline void DoPrintPuzzle(HWND hwnd, const HoDoKuStudio& studio) {
+    PRINTDLGW pd = {};
+    pd.lStructSize = sizeof(pd);
+    pd.hwndOwner = hwnd;
+    pd.Flags = PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE | PD_NOSELECTION;
+
+    if (PrintDlgW(&pd)) {
+        DOCINFOW di = {};
+        di.cbSize = sizeof(DOCINFOW);
+        di.lpszDocName = L"HoDoKu Sudoku Puzzle";
+
+        if (StartDocW(pd.hDC, &di) > 0) {
+            if (StartPage(pd.hDC) > 0) {
+                int pWidth = GetDeviceCaps(pd.hDC, HORZRES);
+                int pHeight = GetDeviceCaps(pd.hDC, VERTRES);
+
+                Gdiplus::Graphics g(pd.hDC);
+                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+                g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+
+                // Print header
+                Gdiplus::FontFamily fontFamily(L"Arial");
+                Gdiplus::Font titleFont(&fontFamily, 22, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+                Gdiplus::Font subFont(&fontFamily, 12, Gdiplus::FontStyleRegular, Gdiplus::UnitPoint);
+                Gdiplus::SolidBrush blackBrush(Gdiplus::Color(255, 0, 0, 0));
+
+                std::wstring lvlName = L"Easy";
+                switch (studio.get_hardest_level()) {
+                    case DifficultyLevel::Easy: lvlName = L"Easy"; break;
+                    case DifficultyLevel::Medium: lvlName = L"Medium"; break;
+                    case DifficultyLevel::Hard: lvlName = L"Hard"; break;
+                    case DifficultyLevel::Unfair: lvlName = L"Unfair"; break;
+                    case DifficultyLevel::Extreme: lvlName = L"Extreme"; break;
+                }
+
+                std::wstring title = L"HoDoKu Sudoku - Level: " + lvlName + L" (Score: " + std::to_wstring(studio.get_total_score()) + L")";
+                std::wstring sub = L"Clues: " + std::to_wstring(studio.get_givens_count()) + L"  |  Printed: " + std::to_wstring(81 - studio.get_unfilled_count()) + L" set cells";
+
+                int topMargin = pHeight * 0.06f;
+                int leftMargin = pWidth * 0.10f;
+                int gridPrintSize = pWidth * 0.80f;
+
+                Gdiplus::PointF titlePt(static_cast<float>(leftMargin), static_cast<float>(topMargin));
+                g.DrawString(title.c_str(), -1, &titleFont, titlePt, &blackBrush);
+
+                Gdiplus::PointF subPt(static_cast<float>(leftMargin), static_cast<float>(topMargin + pHeight * 0.04f));
+                g.DrawString(sub.c_str(), -1, &subFont, subPt, &blackBrush);
+
+                // Render grid
+                int gridTop = topMargin + pHeight * 0.08f;
+                GridRenderer printRenderer;
+                printRenderer.render_grid_canvas(g, studio, leftMargin, gridTop, gridPrintSize, gridPrintSize);
+
+                // Print footer
+                std::wstring footer = L"Printed with HoDoKu Native (C++20 High-Performance Edition)";
+                Gdiplus::PointF footerPt(static_cast<float>(leftMargin), static_cast<float>(gridTop + gridPrintSize + pHeight * 0.03f));
+                g.DrawString(footer.c_str(), -1, &subFont, footerPt, &blackBrush);
+
+                EndPage(pd.hDC);
+            }
+            EndDoc(pd.hDC);
+        }
+        DeleteDC(pd.hDC);
+        if (pd.hDevMode) GlobalFree(pd.hDevMode);
+        if (pd.hDevNames) GlobalFree(pd.hDevNames);
     }
 }
 

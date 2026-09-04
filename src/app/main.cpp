@@ -249,7 +249,7 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             return true;
         }
         if (wParam == 'P') {
-            ShowPreferencesDialog(g_hwnd);
+            DoPrintPuzzle(g_hwnd, *g_studio);
             return true;
         }
         if (wParam == 'B') {
@@ -687,6 +687,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             DoFileSaveAs(hwnd, *g_studio);
         } else if (id == IDM_FILE_EXPORT_PNG) {
             DoExportPng(hwnd, *g_studio);
+        } else if (id == IDM_FILE_PRINT) {
+            DoPrintPuzzle(hwnd, *g_studio);
         } else if (id == IDM_EDIT_ADD_SAVEPOINT) {
             g_studio->add_savepoint();
             MessageBoxW(hwnd, L"Current board state bookmarked successfully.", L"Bookmark Added - HoDoKu", MB_OK | MB_ICONINFORMATION);
