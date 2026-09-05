@@ -342,7 +342,13 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     int hCell = studio.get_hovered_cell();
     int hCand = studio.get_hovered_candidate();
 
-    if (studio.is_link_mode()) {
+    if (studio.is_auto_playing()) {
+        size_t rem = studio.get_solution_path().size();
+        part1 = L" [Auto-Play: Playing (" + std::to_wstring(studio.get_auto_play_delay()) + L" ms)] " + std::to_wstring(rem) + L" steps remaining | F5/Ctrl+P: Pause, Esc: Stop";
+    } else if (studio.is_auto_play_paused()) {
+        size_t rem = studio.get_solution_path().size();
+        part1 = L" [Auto-Play: Paused] " + std::to_wstring(rem) + L" steps remaining | F5/Ctrl+P: Resume, F6: Step Fwd, F7: Step Back, Esc: Stop";
+    } else if (studio.is_link_mode()) {
         std::wstring linkKind = studio.is_drawing_strong_link() ? L"Strong Link (Solid)" : L"Weak Link (Dashed)";
         int activeCol = studio.get_active_color_index();
         std::wstring colStr = (activeCol >= 0 && activeCol < 10) ? (L" | Color: #" + std::to_wstring(activeCol + 1)) : L"";
@@ -786,6 +792,10 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_CONCRETE, L"&Concrete Hint\tCtrl+F12");
     AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_VAGUE, L"&Vague Hint\tAlt+F12");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_EXECUTE_HINT, L"&Execute Step\tCtrl+E");
+    AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_AUTOPLAY, L"&Auto-Solve Play/Pause\tF5");
+    AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_STEP_FORWARD, L"Step &Forward\tF6");
+    AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_STEP_BACKWARD, L"Step &Backward\tF7");
     AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SET_SINGLES, L"Set All &Singles\tF11");
     AppendMenuW(hPuzzle, MF_STRING, IDM_SOLVER_FIND_BACKDOORS, L"Find &Backdoors...");

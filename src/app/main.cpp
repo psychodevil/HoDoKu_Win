@@ -97,8 +97,15 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     bool isAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-    // 0. Escape: In main window, cancels link start/mode, ends coloring mode, or clears active hint step
+    // 0. Escape: In main window, cancels auto-play, link start/mode, ends coloring mode, or clears active hint step
     if (wParam == VK_ESCAPE) {
+        if (g_studio->is_auto_playing() || g_studio->is_auto_play_paused()) {
+            g_studio->stop_auto_play();
+            KillTimer(g_hwnd, IDT_AUTOPLAY);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
         if (g_studio->has_link_start()) {
             g_studio->cancel_link_start();
             UpdateStatusBarText(*g_studio);
@@ -184,7 +191,20 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         }
     }
 
-    // 4. Hints & Solver Function Keys: F11 (Singles), F12 (Next Step), Alt+F12 (Vague), Ctrl+F12 (Concrete)
+    // 4. Auto-Play & Hints Function Keys: F5/Ctrl+P (Play/Pause), F6 (Step Fwd), F7 (Step Back), F11 (Singles), F12 (Next Step)
+    if (wParam == VK_F5 || (isCtrl && (wParam == 'P' || wParam == 'p'))) {
+        SendMessageW(g_hwnd, WM_COMMAND, MAKEWPARAM(IDM_PUZZLE_AUTOPLAY, 0), 0);
+        return true;
+    }
+    if (wParam == VK_F6 || (isCtrl && wParam == VK_RIGHT)) {
+        SendMessageW(g_hwnd, WM_COMMAND, MAKEWPARAM(IDM_PUZZLE_STEP_FORWARD, 0), 0);
+        return true;
+    }
+    if (wParam == VK_F7 || (isCtrl && wParam == VK_LEFT)) {
+        SendMessageW(g_hwnd, WM_COMMAND, MAKEWPARAM(IDM_PUZZLE_STEP_BACKWARD, 0), 0);
+        return true;
+    }
+
     if (wParam == VK_F11) {
         g_studio->set_all_singles();
         if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
@@ -529,6 +549,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
 
+    case WM_TIMER: {
+        if (wParam == IDT_AUTOPLAY && g_studio) {
+            if (g_studio->is_auto_playing()) {
+                bool hasMore = g_studio->step_auto_play();
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                else PopulateListView(*g_studio);
+                UpdateHintBoxText(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+                if (!hasMore) {
+                    KillTimer(hwnd, IDT_AUTOPLAY);
+                }
+            } else {
+                KillTimer(hwnd, IDT_AUTOPLAY);
+            }
+            return 0;
+        }
+        break;
+    }
+
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
@@ -782,6 +822,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         } else if (id == IDC_BTN_HINT_BOX_CANCEL) {
             g_studio->cancel_hint();
             UpdateHintBoxText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_PUZZLE_AUTOPLAY) {
+            if (g_studio->is_auto_playing()) {
+                g_studio->pause_auto_play();
+                KillTimer(hwnd, IDT_AUTOPLAY);
+            } else if (g_studio->is_auto_play_paused()) {
+                g_studio->resume_auto_play();
+                SetTimer(hwnd, IDT_AUTOPLAY, g_studio->get_auto_play_delay(), NULL);
+            } else {
+                if (g_studio->start_auto_play()) {
+                    SetTimer(hwnd, IDT_AUTOPLAY, g_studio->get_auto_play_delay(), NULL);
+                }
+            }
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_PUZZLE_AUTOPLAY_PAUSE) {
+            g_studio->pause_auto_play();
+            KillTimer(hwnd, IDT_AUTOPLAY);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_PUZZLE_STEP_FORWARD) {
+            if (g_studio->is_auto_playing()) {
+                g_studio->pause_auto_play();
+                KillTimer(hwnd, IDT_AUTOPLAY);
+            }
+            g_studio->step_forward();
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_PUZZLE_STEP_BACKWARD) {
+            if (g_studio->is_auto_playing()) {
+                g_studio->pause_auto_play();
+                KillTimer(hwnd, IDT_AUTOPLAY);
+            }
+            g_studio->step_backward();
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDC_BTN_SINGLES || id == IDM_PUZZLE_SET_SINGLES || id == IDC_BTN_HINT_BOX_SOLVE_UP_TO) {
             g_studio->set_all_singles();
@@ -1237,6 +1319,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             SettingsManager::save(s);
         }
+        KillTimer(hwnd, IDT_AUTOPLAY);
         PostQuitMessage(0);
         return 0;
     }

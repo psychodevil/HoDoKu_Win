@@ -1,4 +1,4 @@
-# Overall Project Progress: 94% (73 completed / 78 total tasks)
+# Overall Project Progress: 95% (74 completed / 78 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -263,7 +263,7 @@ High-level architectural objective: Provide interactive tutor validation, CLI au
   - Provide Play, Pause, Step Forward, Step Backward controls and adjustable playback delay slider.
   - **Definition of Done:** Smooth automatic playback through all solution steps with visual hint highlighting on each step.
 - **Granular Checklist:**
-  - [ ] Implement timed auto-playback controller (`SetTimer`) stepping through the solution path automatically.
+  - [x] Implement timed auto-playback controller (`SetTimer`) stepping through the solution path automatically.
   - [ ] Add Play / Pause / Step Forward / Step Backward toolbar controls and speed slider.
   - [ ] Highlight eliminated candidates and placed digits with visual step transitions during auto-play.
 

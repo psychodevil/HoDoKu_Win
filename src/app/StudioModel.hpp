@@ -157,12 +157,14 @@ public:
         m_redoStack.clear();
         m_userLinks.clear();
         cancel_link_start();
+        stop_auto_play();
         recalculate_solution_path();
         recalculate_fas();
         update_solution();
     }
 
     void reset_puzzle() {
+        stop_auto_play();
         push_undo();
         m_board = m_initialBoard;
         m_cellColors.fill(COLOR_NONE);
@@ -175,6 +177,7 @@ public:
     }
 
     void clear_grid() {
+        stop_auto_play();
         push_undo();
         m_board.clear();
         m_initialBoard.clear();
@@ -529,6 +532,128 @@ public:
     void cancel_hint() {
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
+    }
+
+    // Auto-Play Solving Animation Controller (Plan 6.4)
+    AutoPlayState get_auto_play_state() const noexcept { return m_autoPlayState; }
+    bool is_auto_playing() const noexcept { return m_autoPlayState == AutoPlayState::Playing; }
+    bool is_auto_play_paused() const noexcept { return m_autoPlayState == AutoPlayState::Paused; }
+    int get_auto_play_delay() const noexcept { return m_autoPlayDelayMs; }
+    void set_auto_play_delay(int ms) noexcept { m_autoPlayDelayMs = std::clamp(ms, 50, 5000); }
+
+    bool start_auto_play(int delayMs = -1) {
+        if (delayMs > 0) set_auto_play_delay(delayMs);
+        if (m_board.is_solved()) {
+            m_autoPlayState = AutoPlayState::Stopped;
+            return false;
+        }
+        if (m_solutionPath.empty()) {
+            recalculate_solution_path();
+        }
+        if (m_solutionPath.empty()) {
+            m_autoPlayState = AutoPlayState::Stopped;
+            return false;
+        }
+
+        m_autoPlayState = AutoPlayState::Playing;
+        if (!m_selectedStep.has_value() || m_hintLevel == HintLevel::None) {
+            give_concrete_hint();
+        }
+        return true;
+    }
+
+    void pause_auto_play() noexcept {
+        if (m_autoPlayState == AutoPlayState::Playing) {
+            m_autoPlayState = AutoPlayState::Paused;
+        }
+    }
+
+    void resume_auto_play() noexcept {
+        if (m_autoPlayState == AutoPlayState::Paused) {
+            if (!m_board.is_solved() && !m_solutionPath.empty()) {
+                m_autoPlayState = AutoPlayState::Playing;
+            } else {
+                m_autoPlayState = AutoPlayState::Stopped;
+            }
+        }
+    }
+
+    void stop_auto_play() noexcept {
+        m_autoPlayState = AutoPlayState::Stopped;
+    }
+
+    bool toggle_auto_play() {
+        if (m_autoPlayState == AutoPlayState::Playing) {
+            pause_auto_play();
+            return false;
+        } else if (m_autoPlayState == AutoPlayState::Paused) {
+            resume_auto_play();
+            return true;
+        } else {
+            return start_auto_play();
+        }
+    }
+
+    bool step_auto_play() {
+        if (m_autoPlayState != AutoPlayState::Playing) return false;
+
+        if (m_board.is_solved()) {
+            m_autoPlayState = AutoPlayState::Stopped;
+            m_selectedStep.reset();
+            m_hintLevel = HintLevel::None;
+            return false;
+        }
+
+        if (m_selectedStep.has_value()) {
+            execute_hint();
+        } else {
+            if (m_solutionPath.empty()) recalculate_solution_path();
+            if (!m_solutionPath.empty()) {
+                give_concrete_hint();
+                return true;
+            }
+        }
+
+        if (m_board.is_solved() || m_solutionPath.empty()) {
+            m_autoPlayState = AutoPlayState::Stopped;
+            m_selectedStep.reset();
+            m_hintLevel = HintLevel::None;
+            return false;
+        }
+
+        give_concrete_hint();
+        return true;
+    }
+
+    bool step_forward() {
+        if (m_board.is_solved()) return false;
+
+        if (m_selectedStep.has_value()) {
+            execute_hint();
+            if (!m_board.is_solved() && !m_solutionPath.empty()) {
+                give_concrete_hint();
+            }
+            return true;
+        }
+
+        if (m_solutionPath.empty()) recalculate_solution_path();
+        if (!m_solutionPath.empty()) {
+            give_concrete_hint();
+            return true;
+        }
+        return false;
+    }
+
+    bool step_backward() {
+        if (can_undo()) {
+            undo();
+            if (m_solutionPath.empty()) recalculate_solution_path();
+            if (!m_solutionPath.empty()) {
+                give_concrete_hint();
+            }
+            return true;
+        }
+        return false;
     }
 
     void set_all_singles() {
@@ -1158,6 +1283,9 @@ private:
     std::vector<Savepoint> m_savepoints;
     bool m_colorKuMode{false};
     std::wstring m_currentFilePath;
+
+    AutoPlayState m_autoPlayState{AutoPlayState::Stopped};
+    int m_autoPlayDelayMs{750};
 
     std::vector<TechniqueType> m_trainingTechniques;
 

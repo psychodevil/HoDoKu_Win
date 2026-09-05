@@ -130,6 +130,10 @@ enum MenuAndControlId {
     IDM_PUZZLE_EXECUTE_HINT = 2033,
     IDM_PUZZLE_SET_SINGLES = 2034,
     IDM_PUZZLE_SOLVE_DLX = 2035,
+    IDM_PUZZLE_AUTOPLAY = 2040,
+    IDM_PUZZLE_AUTOPLAY_PAUSE,
+    IDM_PUZZLE_STEP_FORWARD,
+    IDM_PUZZLE_STEP_BACKWARD,
 
     IDM_HELP_MANUAL,
     IDM_HELP_TECHNIQUES,
@@ -200,6 +204,16 @@ enum MenuAndControlId {
     // Status Bar Color Palette Controls
     IDC_STATUS_COLOR_BASE = 6200, // 6200..6209 (Colors 0..9)
     IDC_STATUS_COLOR_RESET = 6210
+};
+
+// Win32 Timer IDs
+constexpr UINT_PTR IDT_AUTOPLAY = 2001;
+
+// Auto-Play solving playback states
+enum class AutoPlayState {
+    Stopped,
+    Playing,
+    Paused
 };
 
 constexpr int8_t COLOR_NONE = -1;
