@@ -135,6 +135,30 @@ public:
         SolidBrush bgCanvas(Color(255, 255, 255, 255)); // HoDoKu DEFAULT_CELL_COLOR = Color.WHITE
         g.FillRectangle(&bgCanvas, m_offsetX, m_offsetY, m_gridSize, m_gridSize);
 
+        // 1.5 Variant region background shading
+        SudokuVariant activeVariant = studio.get_variant();
+        bool hasDiag = has_diagonal_constraint(activeVariant);
+        bool hasHyper = has_hyper_constraint(activeVariant);
+
+        if (hasDiag) {
+            SolidBrush diagShade(Color(255, 242, 245, 252)); // Subtle soft cool tint for diagonals
+            for (int r = 0; r < 9; ++r) {
+                g.FillRectangle(&diagShade, m_offsetX + r * m_cellSize, m_offsetY + r * m_cellSize, m_cellSize, m_cellSize);
+                g.FillRectangle(&diagShade, m_offsetX + (8 - r) * m_cellSize, m_offsetY + r * m_cellSize, m_cellSize, m_cellSize);
+            }
+        }
+
+        if (hasHyper) {
+            SolidBrush hyperShade(Color(255, 230, 238, 250)); // Soft distinct periwinkle for Windoku windows
+            for (int w = 0; w < HYPER_WINDOWS; ++w) {
+                for (int cell : get_hyper_window_cells(w)) {
+                    int r = cell_row(cell);
+                    int c = cell_col(cell);
+                    g.FillRectangle(&hyperShade, m_offsetX + c * m_cellSize, m_offsetY + r * m_cellSize, m_cellSize, m_cellSize);
+                }
+            }
+        }
+
         // HoDoKu Official Color Palette from Options.java
         SolidBrush aktCellBrush(Color(255, 255, 255, 150));     // HoDoKu AKT_CELL_COLOR = new Color(255, 255, 150)
         SolidBrush possibleCellBrush(Color(255, 185, 255, 185)); // HoDoKu POSSIBLE_CELL_COLOR = new Color(185, 255, 185)
@@ -285,6 +309,28 @@ public:
             float pos = i * m_cellSize;
             g.DrawLine(&thickLine, m_offsetX + pos, static_cast<float>(m_offsetY), m_offsetX + pos, static_cast<float>(m_offsetY + m_gridSize));
             g.DrawLine(&thickLine, static_cast<float>(m_offsetX), m_offsetY + pos, static_cast<float>(m_offsetX + m_gridSize), m_offsetY + pos);
+        }
+
+        // 3.5 Variant Borders & Diagonal Guidelines
+        if (hasHyper) {
+            Pen hyperBoxPen(Color(255, 60, 110, 195), 2.5f);
+            // Window 0: (1,1)
+            g.DrawRectangle(&hyperBoxPen, m_offsetX + 1 * m_cellSize, m_offsetY + 1 * m_cellSize, 3 * m_cellSize, 3 * m_cellSize);
+            // Window 1: (1,5)
+            g.DrawRectangle(&hyperBoxPen, m_offsetX + 5 * m_cellSize, m_offsetY + 1 * m_cellSize, 3 * m_cellSize, 3 * m_cellSize);
+            // Window 2: (5,1)
+            g.DrawRectangle(&hyperBoxPen, m_offsetX + 1 * m_cellSize, m_offsetY + 5 * m_cellSize, 3 * m_cellSize, 3 * m_cellSize);
+            // Window 3: (5,5)
+            g.DrawRectangle(&hyperBoxPen, m_offsetX + 5 * m_cellSize, m_offsetY + 5 * m_cellSize, 3 * m_cellSize, 3 * m_cellSize);
+        }
+
+        if (hasDiag) {
+            Pen diagLinePen(Color(140, 80, 130, 205), 1.5f);
+            diagLinePen.SetDashStyle(DashStyleDash);
+            g.DrawLine(&diagLinePen, static_cast<float>(m_offsetX), static_cast<float>(m_offsetY),
+                       static_cast<float>(m_offsetX + m_gridSize), static_cast<float>(m_offsetY + m_gridSize));
+            g.DrawLine(&diagLinePen, static_cast<float>(m_offsetX + m_gridSize), static_cast<float>(m_offsetY),
+                       static_cast<float>(m_offsetX), static_cast<float>(m_offsetY + m_gridSize));
         }
 
         // 4. Digits & Candidates (Fonts and Brushes from Options.java)

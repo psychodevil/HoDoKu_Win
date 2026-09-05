@@ -434,6 +434,39 @@ void test_generator() {
     DifficultyLevel lvl = gen.evaluate_difficulty(easyPuz, score);
     std::cout << " Generated " << difficulty_name(lvl) << " puzzle (Score: " << score << ", Clues: " << easyPuz.get_givens().count() << ")!\n";
 
+    // Variant generator tests
+    std::cout << "  -> Testing Diagonal Sudoku (X-Sudoku) terminal generation and clue digging...";
+    BoardState diag_terminal = gen.generate_terminal_grid(SudokuVariant::Diagonal);
+    assert(diag_terminal.unfilled_count() == 0);
+    CandidateMask d_main = 0, d_anti = 0;
+    for (int i = 0; i < 9; ++i) {
+        d_main |= digit_to_mask(diag_terminal.get_value(cell_index(i, i)));
+        d_anti |= digit_to_mask(diag_terminal.get_value(cell_index(i, 8 - i)));
+    }
+    assert(d_main == ALL_CANDIDATES_MASK);
+    assert(d_anti == ALL_CANDIDATES_MASK);
+
+    BoardState diag_puzzle = gen.dig_puzzle(diag_terminal, SymmetryType::Rotational180, SudokuVariant::Diagonal);
+    DlxSolver dlx_diag(SudokuVariant::Diagonal);
+    assert(dlx_diag.count_solutions(diag_puzzle, 2) == 1);
+    std::cout << " PASSED (" << diag_puzzle.get_givens().count() << " clues)\n";
+
+    std::cout << "  -> Testing Hyper-Sudoku (Windoku) terminal generation and clue digging...";
+    BoardState hyper_terminal = gen.generate_terminal_grid(SudokuVariant::Hyper);
+    assert(hyper_terminal.unfilled_count() == 0);
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_mask = 0;
+        for (int c : get_hyper_window_cells(w)) {
+            win_mask |= digit_to_mask(hyper_terminal.get_value(c));
+        }
+        assert(win_mask == ALL_CANDIDATES_MASK);
+    }
+
+    BoardState hyper_puzzle = gen.dig_puzzle(hyper_terminal, SymmetryType::Rotational180, SudokuVariant::Hyper);
+    DlxSolver dlx_hyper(SudokuVariant::Hyper);
+    assert(dlx_hyper.count_solutions(hyper_puzzle, 2) == 1);
+    std::cout << " PASSED (" << hyper_puzzle.get_givens().count() << " clues)\n";
+
     std::cout << "[TEST] Procedural Generator & Symmetries... PASSED\n";
 }
 

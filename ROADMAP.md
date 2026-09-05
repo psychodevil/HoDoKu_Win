@@ -1,4 +1,4 @@
-# Overall Project Progress: 67% (86 completed / 129 total tasks)
+# Overall Project Progress: 67% (87 completed / 129 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -292,7 +292,7 @@ High-level architectural objective: Extend the core exact cover matrix and candi
   - [x] Implement `DiagonalBitboards` mapping main and anti-diagonal houses.
   - [x] Implement `HyperSudokuWindows` mapping the four 3x3 interior window regions.
   - [x] Integrate diagonal and window constraint columns into `DlxSolver` exact cover matrix.
-  - [ ] Support Diagonal and Windoku mode toggling in UI and generator.
+  - [x] Support Diagonal and Windoku mode toggling in UI and generator.
 
 ### Implementation Plan 7.2: Killer Sudoku Arithmetic & Cage Elimination
 - **Planned Impact:** 3%

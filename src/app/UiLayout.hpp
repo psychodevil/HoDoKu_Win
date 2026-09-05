@@ -483,6 +483,11 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
         modeStr = L"Practicing (Training Active)";
     }
 
+    if (studio.get_variant() != SudokuVariant::Standard) {
+        std::string_view vn = variant_name(studio.get_variant());
+        modeStr += L" [" + std::wstring(vn.begin(), vn.end()) + L"]";
+    }
+
     std::wstring part2 = L" Progress: " + std::to_wstring(progress) + L"% (" + std::to_wstring(freeCells) + L" free)  |  Mode: " + modeStr;
     std::wstring part3 = !studio.get_user_links().empty() ? L" Links: " + std::to_wstring(studio.get_user_links().size()) : L"";
 
@@ -975,6 +980,13 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hMode, MF_STRING, IDM_MODE_PLAYING, L"&Playing Mode");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_LEARNING, L"&Learning Mode (Tutor)");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_PRACTICING, L"Prac&ticing Mode");
+    AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
+    HMENU hVariants = CreatePopupMenu();
+    AppendMenuW(hVariants, MF_STRING, IDM_VARIANT_STANDARD, L"&Standard Sudoku");
+    AppendMenuW(hVariants, MF_STRING, IDM_VARIANT_DIAGONAL, L"&Diagonal Sudoku (X-Sudoku)");
+    AppendMenuW(hVariants, MF_STRING, IDM_VARIANT_HYPER, L"&Hyper-Sudoku (Windoku)");
+    AppendMenuW(hVariants, MF_STRING, IDM_VARIANT_DIAGONAL_HYPER, L"Diagonal Hyper-Sudoku (&X-Windoku)");
+    AppendMenuW(hMode, MF_POPUP, (UINT_PTR)hVariants, L"Sudoku &Variant");
     AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CHECK_PROGRESS, L"&Check Progress (Tutor)\tCtrl+T");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CONFIG_TRAINING, L"&Configure Training Techniques...");

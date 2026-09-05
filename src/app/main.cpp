@@ -536,6 +536,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         };
         CreateHoDoKuUI(hwnd);
         SetMenu(hwnd, CreateHoDoKuMenuBar());
+        CheckMenuRadioItem(GetMenu(hwnd), IDM_VARIANT_STANDARD, IDM_VARIANT_DIAGONAL_HYPER, IDM_VARIANT_STANDARD, MF_BYCOMMAND);
         return 0;
     }
 
@@ -990,6 +991,38 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         } else if (id == IDM_MODE_LINK_CLEAR) {
             g_studio->clear_user_links();
             UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_VARIANT_STANDARD) {
+            g_studio->set_variant(SudokuVariant::Standard);
+            CheckMenuRadioItem(GetMenu(hwnd), IDM_VARIANT_STANDARD, IDM_VARIANT_DIAGONAL_HYPER, IDM_VARIANT_STANDARD, MF_BYCOMMAND);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_VARIANT_DIAGONAL) {
+            g_studio->set_variant(SudokuVariant::Diagonal);
+            CheckMenuRadioItem(GetMenu(hwnd), IDM_VARIANT_STANDARD, IDM_VARIANT_DIAGONAL_HYPER, IDM_VARIANT_DIAGONAL, MF_BYCOMMAND);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_VARIANT_HYPER) {
+            g_studio->set_variant(SudokuVariant::Hyper);
+            CheckMenuRadioItem(GetMenu(hwnd), IDM_VARIANT_STANDARD, IDM_VARIANT_DIAGONAL_HYPER, IDM_VARIANT_HYPER, MF_BYCOMMAND);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_VARIANT_DIAGONAL_HYPER) {
+            g_studio->set_variant(SudokuVariant::DiagonalHyper);
+            CheckMenuRadioItem(GetMenu(hwnd), IDM_VARIANT_STANDARD, IDM_VARIANT_DIAGONAL_HYPER, IDM_VARIANT_DIAGONAL_HYPER, MF_BYCOMMAND);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            UpdateHintBoxText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_FILE_COPY_GIVENS) {
             SetClipboardText(hwnd, g_studio->export_givens_string());
