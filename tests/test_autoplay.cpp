@@ -129,6 +129,40 @@ int main() {
     assert(manualBack);
     std::cout << "[TEST] Toolbar Stop action and manual stepping... PASSED\n";
 
+    // 11. Visual Step Transitions for Eliminated Candidates & Placed Digits (Plan 6.4 Task 3)
+    studio.import_from_string(PUZZLE_LIBRARY[0].second);
+    assert(!studio.has_transition());
+
+    studio.give_concrete_hint();
+    assert(studio.get_selected_step().has_value());
+    auto stepToExec = studio.get_selected_step().value();
+    studio.execute_hint();
+
+    assert(studio.has_transition());
+    const auto& transition = studio.get_last_transition();
+    assert(transition.active);
+    assert(transition.technique_name == stepToExec.name);
+
+    // Verify placed digits tracking
+    if (!stepToExec.assignments.empty()) {
+        int placedCell = stepToExec.assignments.front().cell;
+        int placedDigit = stepToExec.assignments.front().digit;
+        assert(studio.is_recently_placed(placedCell));
+        assert(studio.get_recently_placed_digit(placedCell) == placedDigit);
+    }
+
+    // Verify eliminated candidates tracking
+    if (!stepToExec.eliminations.empty()) {
+        int elimCell = stepToExec.eliminations.front().cell;
+        int elimDigit = stepToExec.eliminations.front().digit;
+        assert(studio.is_recently_eliminated(elimCell, elimDigit));
+    }
+
+    // Clear transition cleans up state
+    studio.clear_transition();
+    assert(!studio.has_transition());
+    std::cout << "[TEST] Step Transitions for Eliminated Candidates & Placed Digits... PASSED\n";
+
     std::cout << "========================================\n";
     std::cout << " ALL Auto-Play Tests PASSED!            \n";
     std::cout << "========================================\n";

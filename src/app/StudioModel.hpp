@@ -158,6 +158,7 @@ public:
         m_userLinks.clear();
         cancel_link_start();
         stop_auto_play();
+        clear_transition();
         recalculate_solution_path();
         recalculate_fas();
         update_solution();
@@ -165,6 +166,7 @@ public:
 
     void reset_puzzle() {
         stop_auto_play();
+        clear_transition();
         push_undo();
         m_board = m_initialBoard;
         m_cellColors.fill(COLOR_NONE);
@@ -178,6 +180,7 @@ public:
 
     void clear_grid() {
         stop_auto_play();
+        clear_transition();
         push_undo();
         m_board.clear();
         m_initialBoard.clear();
@@ -205,6 +208,7 @@ public:
 
     void undo() {
         if (!can_undo()) return;
+        clear_transition();
         m_redoStack.push_back({m_board, m_cellColors, m_candidateColors, m_userLinks});
         auto snap = m_undoStack.back();
         m_undoStack.pop_back();
@@ -221,6 +225,7 @@ public:
 
     void redo() {
         if (!can_redo()) return;
+        clear_transition();
         m_undoStack.push_back({m_board, m_cellColors, m_candidateColors, m_userLinks});
         auto snap = m_redoStack.back();
         m_redoStack.pop_back();
@@ -517,6 +522,12 @@ public:
     void execute_hint() {
         if (!m_selectedStep) return;
         push_undo();
+
+        m_lastTransition.placed_digits = m_selectedStep->assignments;
+        m_lastTransition.eliminated_candidates = m_selectedStep->eliminations;
+        m_lastTransition.technique_name = m_selectedStep->name;
+        m_lastTransition.active = true;
+
         for (const auto& a : m_selectedStep->assignments) {
             m_board.set_value(a.cell, a.digit);
         }
@@ -532,6 +543,7 @@ public:
     void cancel_hint() {
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
+        clear_transition();
     }
 
     // Auto-Play Solving Animation Controller (Plan 6.4)
@@ -980,6 +992,48 @@ public:
         m_activeColorIndex = -1;
     }
 
+    struct StepTransition {
+        std::vector<CandidateAssignment> placed_digits;
+        std::vector<CandidateElimination> eliminated_candidates;
+        std::string technique_name;
+        bool active{false};
+
+        void clear() noexcept {
+            placed_digits.clear();
+            eliminated_candidates.clear();
+            technique_name.clear();
+            active = false;
+        }
+    };
+
+    const StepTransition& get_last_transition() const noexcept { return m_lastTransition; }
+    bool has_transition() const noexcept { return m_lastTransition.active; }
+    void clear_transition() noexcept { m_lastTransition.clear(); }
+
+    bool is_recently_placed(int cell) const noexcept {
+        if (!m_lastTransition.active) return false;
+        for (const auto& a : m_lastTransition.placed_digits) {
+            if (a.cell == cell) return true;
+        }
+        return false;
+    }
+
+    int get_recently_placed_digit(int cell) const noexcept {
+        if (!m_lastTransition.active) return 0;
+        for (const auto& a : m_lastTransition.placed_digits) {
+            if (a.cell == cell) return a.digit;
+        }
+        return 0;
+    }
+
+    bool is_recently_eliminated(int cell, int digit) const noexcept {
+        if (!m_lastTransition.active) return false;
+        for (const auto& e : m_lastTransition.eliminated_candidates) {
+            if (e.cell == cell && e.digit == digit) return true;
+        }
+        return false;
+    }
+
     struct Savepoint {
         std::string name;
         BoardState board;
@@ -1286,6 +1340,7 @@ private:
 
     AutoPlayState m_autoPlayState{AutoPlayState::Stopped};
     int m_autoPlayDelayMs{750};
+    StepTransition m_lastTransition;
 
     std::vector<TechniqueType> m_trainingTechniques;
 

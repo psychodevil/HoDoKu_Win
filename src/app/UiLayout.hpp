@@ -397,10 +397,23 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
 
     if (studio.is_auto_playing()) {
         size_t rem = studio.get_solution_path().size();
-        part1 = L" [Auto-Play: Playing (" + std::to_wstring(studio.get_auto_play_delay()) + L" ms)] " + std::to_wstring(rem) + L" steps remaining | F5/Ctrl+P: Pause, Esc: Stop";
+        std::wstring stepName;
+        if (studio.get_selected_step().has_value()) {
+            std::string n = studio.get_selected_step()->name;
+            stepName = L" | Step: " + std::wstring(n.begin(), n.end());
+        } else if (studio.has_transition()) {
+            std::string n = studio.get_last_transition().technique_name;
+            stepName = L" | Applied: " + std::wstring(n.begin(), n.end());
+        }
+        part1 = L" [Auto-Play: Playing (" + std::to_wstring(studio.get_auto_play_delay()) + L" ms)] " + std::to_wstring(rem) + L" steps remaining" + stepName + L" | F5/Ctrl+P: Pause, Esc: Stop";
     } else if (studio.is_auto_play_paused()) {
         size_t rem = studio.get_solution_path().size();
-        part1 = L" [Auto-Play: Paused] " + std::to_wstring(rem) + L" steps remaining | F5/Ctrl+P: Resume, F6: Step Fwd, F7: Step Back, Esc: Stop";
+        std::wstring stepName;
+        if (studio.get_selected_step().has_value()) {
+            std::string n = studio.get_selected_step()->name;
+            stepName = L" | Next: " + std::wstring(n.begin(), n.end());
+        }
+        part1 = L" [Auto-Play: Paused] " + std::to_wstring(rem) + L" steps remaining" + stepName + L" | F5/Ctrl+P: Resume, F6: Step Fwd, F7: Step Back, Esc: Stop";
     } else if (studio.is_link_mode()) {
         std::wstring linkKind = studio.is_drawing_strong_link() ? L"Strong Link (Solid)" : L"Weak Link (Dashed)";
         int activeCol = studio.get_active_color_index();

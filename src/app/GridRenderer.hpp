@@ -140,6 +140,16 @@ public:
         SolidBrush possibleCellBrush(Color(255, 185, 255, 185)); // HoDoKu POSSIBLE_CELL_COLOR = new Color(185, 255, 185)
         SolidBrush invalidCellBrush(Color(255, 255, 185, 185));  // HoDoKu INVALID_CELL_COLOR = new Color(255, 185, 185)
 
+        // Step deduction & playback transition highlight brushes
+        SolidBrush primaryCellBrush(Color(255, 254, 240, 138));      // Soft gold/amber (HINT_CELL_COLOR)
+        Pen primaryCellPen(Color(255, 234, 179, 8), 1.5f);
+        SolidBrush secondaryCellBrush(Color(255, 224, 231, 255));    // Soft lavender (HINT_SECONDARY_CELL_COLOR)
+        Pen secondaryCellPen(Color(255, 168, 85, 247), 1.5f);
+        SolidBrush assignCellBrush(Color(255, 209, 250, 229));       // Soft emerald (ASSIGNMENT_CELL_COLOR)
+        Pen assignCellPen(Color(255, 34, 197, 94), 2.0f);
+        SolidBrush justPlacedBrush(Color(255, 187, 247, 208));       // Vibrant mint/emerald placement flash
+        Pen justPlacedBorder(Color(255, 16, 185, 129), 2.5f);
+
         const auto& board = studio.get_board();
         auto activeStep = studio.get_hovered_step() ? studio.get_hovered_step() : studio.get_selected_step();
         bool showStepOverlays = (studio.get_hint_level() == HintLevel::Concrete && studio.get_selected_step()) || studio.get_hovered_step().has_value();
@@ -151,7 +161,7 @@ public:
         bool filterExcluded = studio.is_filter_excluded_mode();
         BitSet81 conflictCells = board.get_invalid_conflict_cells();
 
-        // 2. Cell Background Highlights (Exact HoDoKu priority order from SudokuPanel.java lines 2160-2220)
+        // 2. Cell Background Highlights (Exact HoDoKu priority order with Step/Playback overlays)
         for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
             int r = cell_row(cell);
             int c = cell_col(cell);
@@ -160,58 +170,87 @@ public:
 
             bool isSelected = studio.is_cell_selected(cell);
             Brush* cellBrush = nullptr;
+            Pen* customCellPen = nullptr;
+
+            // Step Deduction & Playback Transition Overlays
+            if (studio.is_recently_placed(cell)) {
+                cellBrush = &justPlacedBrush;
+                customCellPen = &justPlacedBorder;
+            } else if (showStepOverlays && activeStep) {
+                bool isAssignCell = false;
+                for (const auto& a : activeStep->assignments) {
+                    if (a.cell == cell) {
+                        isAssignCell = true;
+                        break;
+                    }
+                }
+                if (isAssignCell) {
+                    cellBrush = &assignCellBrush;
+                    customCellPen = &assignCellPen;
+                } else if (activeStep->primary_cells.test(cell)) {
+                    cellBrush = &primaryCellBrush;
+                    customCellPen = &primaryCellPen;
+                } else if (activeStep->secondary_cells.test(cell)) {
+                    cellBrush = &secondaryCellBrush;
+                    customCellPen = &secondaryCellPen;
+                }
+            }
 
             // Priority 1: Default selected cell background
-            if (isSelected) {
+            if (isSelected && cellBrush == nullptr) {
                 cellBrush = &aktCellBrush;
             }
 
             // Priority 2: Filter mode (Possible vs Excluded)
-            if (activeFilter > 0 || filterMask != 0) {
-                bool candidateValid = false;
-                if (activeFilter > 0) {
-                    candidateValid = board.has_candidate(cell, activeFilter);
-                } else if (filterMask != 0) {
-                    for (int d = 1; d <= 9; ++d) {
-                        if ((filterMask & (1u << d)) && board.has_candidate(cell, d)) {
-                            candidateValid = true;
-                            break;
+            if (cellBrush == nullptr) {
+                if (activeFilter > 0 || filterMask != 0) {
+                    bool candidateValid = false;
+                    if (activeFilter > 0) {
+                        candidateValid = board.has_candidate(cell, activeFilter);
+                    } else if (filterMask != 0) {
+                        for (int d = 1; d <= 9; ++d) {
+                            if ((filterMask & (1u << d)) && board.has_candidate(cell, d)) {
+                                candidateValid = true;
+                                break;
+                            }
                         }
                     }
-                }
-                if (!filterExcluded) {
-                    // Green mode: ONLY unfilled cells with the candidate are highlighted green (SudokuPanel.java line 2197)
-                    if (board.is_unfilled(cell) && candidateValid) {
+                    if (!filterExcluded) {
+                        // Green mode: ONLY unfilled cells with the candidate are highlighted green (SudokuPanel.java line 2197)
+                        if (board.is_unfilled(cell) && candidateValid) {
+                            cellBrush = &possibleCellBrush;
+                        }
+                    } else {
+                        // Red mode: unfilled cells where candidate is excluded, or cells with conflicts (SudokuPanel.java line 2192)
+                        if (board.is_unfilled(cell) && !candidateValid) {
+                            cellBrush = &invalidCellBrush;
+                        } else if (conflictCells.test(cell)) {
+                            cellBrush = &invalidCellBrush;
+                        }
+                    }
+                } else if (filterBivalue) {
+                    if (board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
                         cellBrush = &possibleCellBrush;
                     }
-                } else {
-                    // Red mode: unfilled cells where candidate is excluded, or cells with conflicts (SudokuPanel.java line 2192)
-                    if (board.is_unfilled(cell) && !candidateValid) {
-                        cellBrush = &invalidCellBrush;
-                    } else if (conflictCells.test(cell)) {
-                        cellBrush = &invalidCellBrush;
-                    }
+                } else if (filterExcluded && conflictCells.test(cell)) {
+                    // Red mode with no active filter: highlight conflicting cells
+                    cellBrush = &invalidCellBrush;
                 }
-            } else if (filterBivalue) {
-                if (board.is_unfilled(cell) && board.count_candidates(cell) == 2) {
-                    cellBrush = &possibleCellBrush;
-                }
-            } else if (filterExcluded && conflictCells.test(cell)) {
-                // Red mode with no active filter: highlight conflicting cells
-                cellBrush = &invalidCellBrush;
             }
 
             // Priority 3: Custom user palette coloring (0..9)
-            int8_t userCol = studio.get_cell_color(cell);
-            SolidBrush uBrush(Color(255, 255, 255, 255));
-            if (userCol >= 0 && userCol < 10) {
-                uBrush.SetColor(HODOKU_PALETTE[userCol]);
-                cellBrush = &uBrush;
+            if (cellBrush == nullptr) {
+                int8_t userCol = studio.get_cell_color(cell);
+                if (userCol >= 0 && userCol < 10) {
+                    SolidBrush uBrush(HODOKU_PALETTE[userCol]);
+                    g.FillRectangle(&uBrush, cx, cy, m_cellSize, m_cellSize);
+                }
+            } else {
+                g.FillRectangle(cellBrush, cx, cy, m_cellSize, m_cellSize);
             }
 
-            // Fill cell if colored
-            if (cellBrush != nullptr) {
-                g.FillRectangle(cellBrush, cx, cy, m_cellSize, m_cellSize);
+            if (customCellPen != nullptr) {
+                g.DrawRectangle(customCellPen, cx + 1.0f, cy + 1.0f, m_cellSize - 2.0f, m_cellSize - 2.0f);
             }
 
             // If selected cell has a background other than aktCellColor, draw HoDoKu cursor frame (SudokuPanel.java line 2208-2220)
@@ -288,21 +327,30 @@ public:
                 } else {
                     RectF cellRect(cx, cy, m_cellSize, m_cellSize);
                     std::wstring text = std::to_wstring(val);
-                    Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush)
+                    SolidBrush justPlacedText(Color(255, 4, 120, 87));
+                    Brush* b = studio.is_recently_placed(cell) ? static_cast<Brush*>(&justPlacedText)
+                             : board.is_given(cell) ? static_cast<Brush*>(&givenBrush)
                              : conflictCells.test(cell) ? static_cast<Brush*>(&wrongBrush)
                              : static_cast<Brush*>(&userBrush);
                     g.DrawString(text.c_str(), -1, &digitFont, cellRect, &centerFmt, b);
+
+                    // Placement indicator dot for recently placed digits during auto-play
+                    if (studio.is_recently_placed(cell)) {
+                        SolidBrush dotBrush(Color(255, 16, 185, 129));
+                        g.FillEllipse(&dotBrush, cx + m_cellSize - 9.0f, cy + 3.0f, 6.0f, 6.0f);
+                    }
                 }
             } else {
                 CandidateMask mask = board.get_candidates(cell);
                 for (int d = 1; d <= 9; ++d) {
-                    if (mask_has_digit(mask, d)) {
-                        int dr = (d - 1) / 3;
-                        int dc = (d - 1) % 3;
-                        float kx = cx + dc * subCell;
-                        float ky = cy + dr * subCell;
-                        RectF candRect(kx, ky, subCell, subCell);
+                    int dr = (d - 1) / 3;
+                    int dc = (d - 1) % 3;
+                    float kx = cx + dc * subCell;
+                    float ky = cy + dr * subCell;
+                    RectF candRect(kx, ky, subCell, subCell);
+                    float ovalOffset = (subCell - candHeight) / 2.0f;
 
+                    if (mask_has_digit(mask, d)) {
                         bool isElim = false;
                         bool isAssign = false;
                         bool isFin = false;
@@ -330,7 +378,6 @@ public:
                             }
                         } else {
                             // Candidate background highlighting (HoDoKu fillOval under candidate digit)
-                            float ovalOffset = (subCell - candHeight) / 2.0f;
                             if (isElim) {
                                 g.FillEllipse(&hintDeleteBackBrush, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
                             } else if (isAssign) {
@@ -364,6 +411,17 @@ public:
                                 g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
                             }
                         }
+                    } else if (studio.is_recently_eliminated(cell, d)) {
+                        // Visual step transition for candidate that was eliminated in the recent step
+                        SolidBrush elimGhostBack(Color(190, 255, 205, 210));
+                        Pen elimGhostPen(Color(230, 220, 38, 38), 1.8f);
+                        SolidBrush elimGhostDigit(Color(200, 185, 28, 28));
+
+                        g.FillEllipse(&elimGhostBack, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
+                        std::wstring candStr = std::to_wstring(d);
+                        g.DrawString(candStr.c_str(), -1, &candBoldFont, candRect, &centerFmt, &elimGhostDigit);
+                        g.DrawLine(&elimGhostPen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
+                        g.DrawLine(&elimGhostPen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
                     }
                 }
             }
