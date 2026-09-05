@@ -5,6 +5,7 @@
 #include "FileManager.hpp"
 #include "Settings.hpp"
 #include "GridRenderer.hpp"
+#include "PrintEngine.hpp"
 #include <fstream>
 #include <functional>
 #include <commctrl.h>
@@ -1080,74 +1081,321 @@ inline void ShowPracticingDialog(HWND hParent, HoDoKuStudio& studio) {
 }
 
 // ============================================================================
-// Print Puzzle
+// Multi-Puzzle Booklet & Print Dialog
 // ============================================================================
-inline void DoPrintPuzzle(HWND hwnd, const HoDoKuStudio& studio) {
-    PRINTDLGW pd = {};
-    pd.lStructSize = sizeof(pd);
-    pd.hwndOwner = hwnd;
-    pd.Flags = PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE | PD_NOSELECTION;
 
-    if (PrintDlgW(&pd)) {
-        DOCINFOW di = {};
-        di.cbSize = sizeof(DOCINFOW);
-        di.lpszDocName = L"HoDoKu Sudoku Puzzle";
+enum PrintDlgControlId {
+    IDC_PRINT_LAYOUT_COMBO = 7101,
+    IDC_PRINT_COUNT_COMBO,
+    IDC_PRINT_DIFF_COMBO,
+    IDC_PRINT_CURR_BOARD_CHK,
+    IDC_PRINT_CANDIDATES_CHK,
+    IDC_PRINT_ALLBLACK_CHK,
+    IDC_PRINT_RATING_CHK,
+    IDC_PRINT_SOLUTIONS_CHK,
+    IDC_PRINT_SUMMARY_LBL,
+    IDC_PRINT_EXECUTE_BTN,
+    IDC_PRINT_CANCEL_BTN
+};
 
-        if (StartDocW(pd.hDC, &di) > 0) {
-            if (StartPage(pd.hDC) > 0) {
-                int pWidth = GetDeviceCaps(pd.hDC, HORZRES);
-                int pHeight = GetDeviceCaps(pd.hDC, VERTRES);
+struct PrintDialogContext {
+    const HoDoKuStudio* studio{nullptr};
+    HWND hDlg{NULL};
+    HWND hOwner{NULL};
+    HWND hComboLayout{NULL};
+    HWND hComboCount{NULL};
+    HWND hComboDiff{NULL};
+    HWND hChkCurrBoard{NULL};
+    HWND hChkCandidates{NULL};
+    HWND hChkAllBlack{NULL};
+    HWND hChkRating{NULL};
+    HWND hChkSolutions{NULL};
+    HWND hLblSummary{NULL};
 
-                Gdiplus::Graphics g(pd.hDC);
-                g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-                g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+    PrintConfig config;
+};
 
-                // Print header
-                Gdiplus::FontFamily fontFamily(L"Arial");
-                Gdiplus::Font titleFont(&fontFamily, 22, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
-                Gdiplus::Font subFont(&fontFamily, 12, Gdiplus::FontStyleRegular, Gdiplus::UnitPoint);
-                Gdiplus::SolidBrush blackBrush(Gdiplus::Color(255, 0, 0, 0));
+inline void UpdatePrintSummary(PrintDialogContext* ctx) {
+    if (!ctx || !ctx->hLblSummary) return;
 
-                std::wstring lvlName = L"Easy";
-                switch (studio.get_hardest_level()) {
-                    case DifficultyLevel::Easy: lvlName = L"Easy"; break;
-                    case DifficultyLevel::Medium: lvlName = L"Medium"; break;
-                    case DifficultyLevel::Hard: lvlName = L"Hard"; break;
-                    case DifficultyLevel::Unfair: lvlName = L"Unfair"; break;
-                    case DifficultyLevel::Extreme: lvlName = L"Extreme"; break;
-                }
-
-                std::wstring title = L"HoDoKu Sudoku - Level: " + lvlName + L" (Score: " + std::to_wstring(studio.get_total_score()) + L")";
-                std::wstring sub = L"Clues: " + std::to_wstring(studio.get_givens_count()) + L"  |  Printed: " + std::to_wstring(81 - studio.get_unfilled_count()) + L" set cells";
-
-                int topMargin = static_cast<int>(pHeight * 0.06f);
-                int leftMargin = static_cast<int>(pWidth * 0.10f);
-                int gridPrintSize = static_cast<int>(pWidth * 0.80f);
-
-                Gdiplus::PointF titlePt(static_cast<float>(leftMargin), static_cast<float>(topMargin));
-                g.DrawString(title.c_str(), -1, &titleFont, titlePt, &blackBrush);
-
-                Gdiplus::PointF subPt(static_cast<float>(leftMargin), static_cast<float>(topMargin + pHeight * 0.04f));
-                g.DrawString(sub.c_str(), -1, &subFont, subPt, &blackBrush);
-
-                // Render grid
-                int gridTop = static_cast<int>(topMargin + pHeight * 0.08f);
-                GridRenderer printRenderer;
-                printRenderer.render_grid_canvas(g, studio, leftMargin, gridTop, gridPrintSize, gridPrintSize);
-
-                // Print footer
-                std::wstring footer = L"Printed with HoDoKu Native (C++20 High-Performance Edition)";
-                Gdiplus::PointF footerPt(static_cast<float>(leftMargin), static_cast<float>(gridTop + gridPrintSize + pHeight * 0.03f));
-                g.DrawString(footer.c_str(), -1, &subFont, footerPt, &blackBrush);
-
-                EndPage(pd.hDC);
-            }
-            EndDoc(pd.hDC);
-        }
-        DeleteDC(pd.hDC);
-        if (pd.hDevMode) GlobalFree(pd.hDevMode);
-        if (pd.hDevNames) GlobalFree(pd.hDevNames);
+    int layoutSel = (int)SendMessageW(ctx->hComboLayout, CB_GETCURSEL, 0, 0);
+    switch (layoutSel) {
+    case 0: ctx->config.layout = PrintLayout::One; break;
+    case 1: ctx->config.layout = PrintLayout::Two; break;
+    case 2: ctx->config.layout = PrintLayout::Four; break;
+    case 3: ctx->config.layout = PrintLayout::Six; break;
+    default: ctx->config.layout = PrintLayout::Four; break;
     }
+
+    int countSel = (int)SendMessageW(ctx->hComboCount, CB_GETCURSEL, 0, 0);
+    const int counts[] = { 1, 2, 4, 6, 8, 12, 16, 24 };
+    if (countSel >= 0 && countSel < 8) {
+        ctx->config.puzzleCount = counts[countSel];
+    } else {
+        ctx->config.puzzleCount = 4;
+    }
+
+    int diffSel = (int)SendMessageW(ctx->hComboDiff, CB_GETCURSEL, 0, 0);
+    if (diffSel == 0) {
+        if (ctx->studio) {
+            ctx->config.difficulty = ctx->studio->get_hardest_level();
+        } else {
+            ctx->config.difficulty = hodoku::core::DifficultyLevel::Medium;
+        }
+        ctx->config.mixedDifficulty = false;
+    } else if (diffSel >= 1 && diffSel <= 5) {
+        ctx->config.difficulty = static_cast<hodoku::core::DifficultyLevel>(diffSel - 1);
+        ctx->config.mixedDifficulty = false;
+    } else if (diffSel == 6) {
+        ctx->config.mixedDifficulty = true;
+    }
+
+    ctx->config.useCurrentBoard = (SendMessageW(ctx->hChkCurrBoard, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    ctx->config.showCandidates = (SendMessageW(ctx->hChkCandidates, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    ctx->config.allBlack = (SendMessageW(ctx->hChkAllBlack, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    ctx->config.printRating = (SendMessageW(ctx->hChkRating, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    ctx->config.includeSolutions = (SendMessageW(ctx->hChkSolutions, BM_GETCHECK, 0, 0) == BST_CHECKED);
+
+    int perPage = static_cast<int>(ctx->config.layout);
+    int puzPages = (ctx->config.puzzleCount + perPage - 1) / perPage;
+    int solPerPage = 6;
+    int solPages = ctx->config.includeSolutions ? ((ctx->config.puzzleCount + solPerPage - 1) / solPerPage) : 0;
+    int totalPages = puzPages + solPages;
+
+    std::wstring summary = L"Booklet: " + std::to_wstring(ctx->config.puzzleCount) + L" puzzle(s) • " +
+                           std::to_wstring(puzPages) + L" puzzle page(s)";
+    if (ctx->config.includeSolutions) {
+        summary += L" + " + std::to_wstring(solPages) + L" solution page(s)";
+    }
+    summary += L" = " + std::to_wstring(totalPages) + L" total page(s)";
+
+    SetWindowTextW(ctx->hLblSummary, summary.c_str());
+}
+
+inline LRESULT CALLBACK PrintDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    PrintDialogContext* ctx = reinterpret_cast<PrintDialogContext*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
+    switch (msg) {
+    case WM_COMMAND: {
+        int id = LOWORD(wParam);
+        int code = HIWORD(wParam);
+        if (!ctx) break;
+
+        if (code == CBN_SELCHANGE || code == BN_CLICKED) {
+            if (id == IDC_PRINT_LAYOUT_COMBO || id == IDC_PRINT_COUNT_COMBO ||
+                id == IDC_PRINT_DIFF_COMBO || id == IDC_PRINT_CURR_BOARD_CHK ||
+                id == IDC_PRINT_SOLUTIONS_CHK || id == IDC_PRINT_CANDIDATES_CHK ||
+                id == IDC_PRINT_ALLBLACK_CHK || id == IDC_PRINT_RATING_CHK) {
+                UpdatePrintSummary(ctx);
+            }
+        }
+
+        if (id == IDC_PRINT_EXECUTE_BTN) {
+            UpdatePrintSummary(ctx);
+            EnableWindow(hwnd, FALSE);
+            bool printed = PrintEngine::execute_print(hwnd, *ctx->studio, ctx->config);
+            EnableWindow(hwnd, TRUE);
+            SetForegroundWindow(hwnd);
+            if (printed) {
+                DestroyWindow(hwnd);
+            }
+            return 0;
+        } else if (id == IDCANCEL || id == 2 || id == IDC_PRINT_CANCEL_BTN) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY: {
+        HWND hOwner = GetWindow(hwnd, GW_OWNER);
+        if (hOwner) {
+            EnableWindow(hOwner, TRUE);
+            SetForegroundWindow(hOwner);
+        }
+        delete ctx;
+        return 0;
+    }
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+inline void ShowPrintDialog(HWND hParent, const HoDoKuStudio& studio) {
+    HINSTANCE hInst = GetModuleHandle(NULL);
+    const wchar_t DLG_CLASS[] = L"HoDoKuPrintDialogClass";
+
+    static bool dlgRegistered = false;
+    if (!dlgRegistered) {
+        WNDCLASSEXW dwc = {};
+        dwc.cbSize = sizeof(WNDCLASSEXW);
+        dwc.lpfnWndProc = PrintDialogProc;
+        dwc.hInstance = hInst;
+        dwc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        dwc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+        dwc.lpszClassName = DLG_CLASS;
+        RegisterClassExW(&dwc);
+        dlgRegistered = true;
+    }
+
+    RECT rcParent;
+    GetWindowRect(hParent, &rcParent);
+    int dw = 500, dh = 520;
+    int dx = rcParent.left + (rcParent.right - rcParent.left - dw) / 2;
+    int dy = rcParent.top + (rcParent.bottom - rcParent.top - dh) / 2;
+
+    HWND hDlg = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        DLG_CLASS,
+        L"Print Sudoku & Multi-Puzzle Booklet - HoDoKu",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        dx, dy, dw, dh,
+        hParent, NULL, hInst, NULL
+    );
+    if (!hDlg) return;
+    EnableWindow(hParent, FALSE);
+
+    PrintDialogContext* ctx = new PrintDialogContext();
+    ctx->studio = &studio;
+    ctx->hDlg = hDlg;
+    ctx->hOwner = hParent;
+    SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
+
+    HFONT hFont = GetHoDoKuDialogFont();
+    HFONT hBoldFont = CreateFontW(-12, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+
+    // Group 1: Page Layout & Puzzle Count
+    HWND hGrpLayout = CreateWindowW(L"BUTTON", L"Page Layout & Puzzle Count",
+                                    WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                    18, 12, 450, 96, hDlg, NULL, hInst, NULL);
+    SendMessage(hGrpLayout, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    HWND hLblLayout = CreateWindowW(L"STATIC", L"Layout per Page:", WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                    32, 36, 120, 20, hDlg, NULL, hInst, NULL);
+    SendMessage(hLblLayout, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hComboLayout = CreateWindowW(L"COMBOBOX", L"",
+                                      WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                      160, 33, 290, 160, hDlg, (HMENU)IDC_PRINT_LAYOUT_COMBO, hInst, NULL);
+    SendMessage(ctx->hComboLayout, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hComboLayout, CB_ADDSTRING, 0, (LPARAM)L"1 Puzzle per Page (Full Page Standard)");
+    SendMessageW(ctx->hComboLayout, CB_ADDSTRING, 0, (LPARAM)L"2 Puzzles per Page (Stacked Vertical)");
+    SendMessageW(ctx->hComboLayout, CB_ADDSTRING, 0, (LPARAM)L"4 Puzzles per Page (2x2 Booklet Grid)");
+    SendMessageW(ctx->hComboLayout, CB_ADDSTRING, 0, (LPARAM)L"6 Puzzles per Page (2x3 Compact Sheet)");
+    SendMessageW(ctx->hComboLayout, CB_SETCURSEL, 2, 0); // Default to 4
+
+    HWND hLblCount = CreateWindowW(L"STATIC", L"Total Puzzles:", WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                   32, 68, 120, 20, hDlg, NULL, hInst, NULL);
+    SendMessage(hLblCount, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hComboCount = CreateWindowW(L"COMBOBOX", L"",
+                                     WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                     160, 65, 290, 160, hDlg, (HMENU)IDC_PRINT_COUNT_COMBO, hInst, NULL);
+    SendMessage(ctx->hComboCount, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"1 puzzle (Single)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"2 puzzles");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"4 puzzles (1 sheet @ 4/page)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"6 puzzles (1 sheet @ 6/page)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"8 puzzles (2 sheets @ 4/page)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"12 puzzles (2 sheets @ 6/page)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"16 puzzles (4 sheets @ 4/page)");
+    SendMessageW(ctx->hComboCount, CB_ADDSTRING, 0, (LPARAM)L"24 puzzles (4 sheets @ 6/page)");
+    SendMessageW(ctx->hComboCount, CB_SETCURSEL, 2, 0); // Default to 4
+
+    // Group 2: Puzzle Source & Difficulty
+    HWND hGrpSource = CreateWindowW(L"BUTTON", L"Puzzle Source & Difficulty",
+                                    WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                    18, 116, 450, 96, hDlg, NULL, hInst, NULL);
+    SendMessage(hGrpSource, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hChkCurrBoard = CreateWindowW(L"BUTTON", L"Include current active board as Puzzle #1",
+                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                       32, 138, 418, 22, hDlg, (HMENU)IDC_PRINT_CURR_BOARD_CHK, hInst, NULL);
+    SendMessage(ctx->hChkCurrBoard, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hChkCurrBoard, BM_SETCHECK, BST_CHECKED, 0);
+
+    HWND hLblDiff = CreateWindowW(L"STATIC", L"Difficulty Level:", WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                  32, 172, 120, 20, hDlg, NULL, hInst, NULL);
+    SendMessage(hLblDiff, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hComboDiff = CreateWindowW(L"COMBOBOX", L"",
+                                    WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                    160, 169, 290, 180, hDlg, (HMENU)IDC_PRINT_DIFF_COMBO, hInst, NULL);
+    SendMessage(ctx->hComboDiff, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Current Board Difficulty");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Easy");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Medium");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Hard");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Unfair");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Extreme");
+    SendMessageW(ctx->hComboDiff, CB_ADDSTRING, 0, (LPARAM)L"Mixed (Progressive Difficulty)");
+    SendMessageW(ctx->hComboDiff, CB_SETCURSEL, 0, 0);
+
+    // Group 3: Booklet & Print Options
+    HWND hGrpOpts = CreateWindowW(L"BUTTON", L"Booklet & Print Options",
+                                  WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                  18, 220, 450, 126, hDlg, NULL, hInst, NULL);
+    SendMessage(hGrpOpts, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hChkCandidates = CreateWindowW(L"BUTTON", L"Show candidate pencilmarks in empty cells",
+                                        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                        32, 242, 418, 20, hDlg, (HMENU)IDC_PRINT_CANDIDATES_CHK, hInst, NULL);
+    SendMessage(ctx->hChkCandidates, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hChkAllBlack = CreateWindowW(L"BUTTON", L"All Black / Ink Saver mode (monochrome)",
+                                      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                      32, 266, 418, 20, hDlg, (HMENU)IDC_PRINT_ALLBLACK_CHK, hInst, NULL);
+    SendMessage(ctx->hChkAllBlack, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hChkRating = CreateWindowW(L"BUTTON", L"Print rating and clue counts in puzzle headers",
+                                    WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                    32, 290, 418, 20, hDlg, (HMENU)IDC_PRINT_RATING_CHK, hInst, NULL);
+    SendMessage(ctx->hChkRating, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hChkRating, BM_SETCHECK, BST_CHECKED, 0);
+
+    ctx->hChkSolutions = CreateWindowW(L"BUTTON", L"Include Solutions & Answer Key page(s) at end of booklet",
+                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                       32, 314, 418, 20, hDlg, (HMENU)IDC_PRINT_SOLUTIONS_CHK, hInst, NULL);
+    SendMessage(ctx->hChkSolutions, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hChkSolutions, BM_SETCHECK, BST_CHECKED, 0);
+
+    // Summary Box
+    ctx->hLblSummary = CreateWindowW(L"STATIC", L"Booklet Summary",
+                                     WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                     20, 356, 446, 36, hDlg, (HMENU)IDC_PRINT_SUMMARY_LBL, hInst, NULL);
+    SendMessage(ctx->hLblSummary, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
+
+    // Action Buttons
+    HWND hBtnPrint = CreateWindowW(L"BUTTON", L"🖨️ Print Booklet...",
+                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                   186, 404, 172, 34, hDlg, (HMENU)IDC_PRINT_EXECUTE_BTN, hInst, NULL);
+    SendMessage(hBtnPrint, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
+
+    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel",
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    366, 404, 102, 34, hDlg, (HMENU)IDCANCEL, hInst, NULL);
+    SendMessage(hBtnCancel, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    UpdatePrintSummary(ctx);
+}
+
+inline void DoPrintPuzzle(HWND hwnd, const HoDoKuStudio& studio) {
+    ShowPrintDialog(hwnd, studio);
 }
 
 // ============================================================================

@@ -524,6 +524,85 @@ public:
         }
     }
 
+    void render_board_clean(Graphics& g, const hodoku::core::BoardState& board, int x, int y, int width, int height, bool show_candidates = false, bool all_black = false) {
+        int availW = width;
+        int availH = height;
+        int size = (std::min)(availW, availH);
+        if (size < 20) return;
+
+        float cellSize = static_cast<float>(size) / 9.0f;
+        int offsetX = x + (availW - size) / 2;
+        int offsetY = y + (availH - size) / 2;
+
+        // Background
+        SolidBrush bgBrush(Color(255, 255, 255, 255));
+        g.FillRectangle(&bgBrush, offsetX, offsetY, size, size);
+
+        // Fonts
+        FontFamily fontFamily(L"Segoe UI");
+        float digitPt = (std::max)(6.0f, cellSize * 0.58f);
+        Font digitFont(&fontFamily, digitPt, FontStyleBold, UnitPixel);
+
+        float candPt = (std::max)(4.0f, cellSize * 0.22f);
+        Font candFont(&fontFamily, candPt, FontStyleRegular, UnitPixel);
+
+        SolidBrush givenBrush(Color(255, 0, 0, 0));
+        SolidBrush userBrush(all_black ? Color(255, 0, 0, 0) : Color(255, 30, 58, 138));
+        SolidBrush candBrush(Color(255, 100, 116, 139));
+
+        StringFormat centerFmt;
+        centerFmt.SetAlignment(StringAlignmentCenter);
+        centerFmt.SetLineAlignment(StringAlignmentCenter);
+
+        float subCell = cellSize / 3.0f;
+
+        // Render cell contents
+        for (int cell = 0; cell < hodoku::core::TOTAL_CELLS; ++cell) {
+            int r = cell_row(cell);
+            int c = cell_col(cell);
+            float cx = offsetX + c * cellSize;
+            float cy = offsetY + r * cellSize;
+
+            uint8_t val = board.get_value(cell);
+            if (val != 0) {
+                RectF cellRect(cx, cy, cellSize, cellSize);
+                std::wstring text = std::to_wstring(val);
+                Brush* b = board.is_given(cell) ? static_cast<Brush*>(&givenBrush) : static_cast<Brush*>(&userBrush);
+                g.DrawString(text.c_str(), -1, &digitFont, cellRect, &centerFmt, b);
+            } else if (show_candidates) {
+                auto mask = board.get_candidates(cell);
+                for (int d = 1; d <= 9; ++d) {
+                    if (hodoku::core::mask_has_digit(mask, d)) {
+                        int dr = (d - 1) / 3;
+                        int dc = (d - 1) % 3;
+                        RectF candRect(cx + dc * subCell, cy + dr * subCell, subCell, subCell);
+                        std::wstring candStr = std::to_wstring(d);
+                        g.DrawString(candStr.c_str(), -1, &candFont, candRect, &centerFmt, &candBrush);
+                    }
+                }
+            }
+        }
+
+        // Thin cell lines (1px)
+        Pen cellPen(Color(255, 203, 213, 225), 1.0f);
+        for (int i = 0; i <= 9; ++i) {
+            if (i % 3 == 0) continue; // Skip box lines
+            float pos = offsetX + i * cellSize;
+            g.DrawLine(&cellPen, pos, static_cast<float>(offsetY), pos, static_cast<float>(offsetY + size));
+            pos = offsetY + i * cellSize;
+            g.DrawLine(&cellPen, static_cast<float>(offsetX), pos, static_cast<float>(offsetX + size), pos);
+        }
+
+        // Thick box lines (2.5px - 3px)
+        Pen boxPen(Color(255, 15, 23, 42), (std::max)(2.0f, cellSize * 0.07f));
+        for (int i = 0; i <= 3; ++i) {
+            float pos = offsetX + i * (3 * cellSize);
+            g.DrawLine(&boxPen, pos, static_cast<float>(offsetY), pos, static_cast<float>(offsetY + size));
+            pos = offsetY + i * (3 * cellSize);
+            g.DrawLine(&boxPen, static_cast<float>(offsetX), pos, static_cast<float>(offsetX + size), pos);
+        }
+    }
+
     int get_grid_size() const { return m_gridSize; }
     float get_cell_size() const { return m_cellSize; }
     int get_offset_x() const { return m_offsetX; }
