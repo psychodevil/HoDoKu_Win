@@ -179,3 +179,54 @@
   4. Run full automated test suite with verbose failure output.
   5. Check `git status` to ensure no unstaged leaks, un-ignored generated files, or tracking desync.
   6. Output binary PASS/FAIL status. If FAIL, list the exact offending logs and block further commits.
+
+  ---
+
+## Skill: analyze-split
+- **Role**: Principal C++ Systems Architect (Modularization & Refactoring).
+- **Trigger Command**: `skill:analyze-split [path/to/target_file_or_directory]`
+- **Constraints**:
+  - Strictly READ-ONLY: Do not modify, split, or rename any source files during this run.
+  - C++ Specificity: Must evaluate translation units (TUs), header inclusion trees, forward declarations, template definitions, and ABI boundaries.
+- **Workflow**:
+  1. **AST & Symbol Scan**:
+     - Parse target `.hpp` and `.cpp` files to catalog classes, structs, templates, inline functions, static globals, and free utility functions.
+     - Detect code smells: monolithic classes, god-objects, mixed concerns (e.g., business logic + SIMD kernels + I/O), and dense header inclusion chains.
+  2. **Decomposition Boundary Analysis**:
+     - Identify clean isolation boundaries based on Single Responsibility and compile-time isolation:
+       - Header hygiene: Where heavy `#include`s can be replaced with forward declarations.
+       - Implementation hiding: Opportunities to move private structures or implementation details into anonymous namespaces, `detail/` headers, or `.cpp` units.
+       - Separate domains: Extract math/SIMD kernels, data structures, serialization/logging, and driver/orchestration logic into separate compilation units.
+  3. **Compilation & Dependency Impact**:
+     - Map current vs. projected dependency graphs to prevent circular `#include` traps.
+     - Evaluate template linkage (header-only vs. explicit template instantiation).
+     - Assess build impact: reduced rebuild times through isolated compilation units.
+  4. **Deliverables**:
+     - **Target File Breakdown**: Current file size vs. recommended split targets.
+     - **Proposed Architecture Tree**: New file paths and explicit namespace assignments.
+     - **Dependency Map**: `#include` requirements for each new header and `.cpp`.
+     - **Roadmap-Ready Task Checklist**: A formatted list of atomic refactoring tasks ready to be appended to `ROADMAP.md` via `skill:replan`.
+
+     ---
+
+## Skill: scan-split-candidates
+- **Role**: C++ Static Analysis & Architecture Auditor.
+- **Trigger Command**: `skill:scan-split-candidates [directory_path]` (defaults to repository root/`src` if omitted).
+- **Constraints**:
+  - Read-only on source code: Inspect `.cpp`, `.hpp`, `.h`, `.cc`, and `.cxx` files without modifying them.
+  - Output Target: Overwrite/update `ROADMAP.md` with the candidate assessment and modularization backlog.
+- **Evaluation Heuristics**:
+  1. **Line Count & TU Bloat**: Files exceeding ~350 LOC.
+  2. **Inclusion Fan-Out**: Headers including heavy standard library headers (e.g., `<iostream>`, `<algorithm>`, `<vector>`, `<chrono>`) or unrelated subsystem headers that could be forward-declared.
+  3. **Class/Symbol Density**: Files declaring multiple distinct classes, structs, or non-cohesive free utility functions.
+  4. **Domain Mixing**: Translation units interleaving separate domains (e.g., compute/SIMD logic, serialization, hardware abstraction, and state orchestration).
+- **Workflow**:
+  1. Traverse workspace source directories and evaluate all `.hpp` and `.cpp` pairs against the heuristics.
+  2. Rank files into **High**, **Medium**, and **Low** split candidacy based on compilation weight and cohesion.
+  3. Generate or restructure `ROADMAP.md` with:
+     - Header progress counter: `Overall Project Progress: 0% (0 completed / N total tasks)`.
+     - A prioritized matrix of candidate files with metrics (LOC, Smells, Candidate Score).
+     - Concrete implementation plans containing actionable task checklists:
+       `- [ ] skill:analyze-split <target_path>`.
+  4. Perform an atomic Git commit: `docs(roadmap): audit codebase and populate split candidate backlog`.
+  5. Print the top 3 critical files that should be split first and halt.
