@@ -13,6 +13,16 @@ inline HWND g_hStatusBar = NULL;
 inline HWND g_hLevelCombo = NULL;
 inline std::vector<HWND> g_toolbarButtons;
 
+// Auto-Play Toolbar & Playback Controls
+inline HWND g_hAutoPlayBackBtn = NULL;
+inline HWND g_hAutoPlayPlayBtn = NULL;
+inline HWND g_hAutoPlayFwdBtn = NULL;
+inline HWND g_hAutoPlayStopBtn = NULL;
+inline HWND g_hAutoPlaySpeedLabel = NULL;
+inline HWND g_hAutoPlaySpeedSlider = NULL;
+inline HWND g_hAutoPlaySpeedVal = NULL;
+inline HWND g_hAutoPlayToolTip = NULL;
+
 // Status Bar Color Palette Swatches
 inline HWND g_hStatusColorBtns[10] = {NULL};
 inline HWND g_hStatusResetBtn = NULL;
@@ -335,6 +345,49 @@ inline void UpdateHintBoxText(const HoDoKuStudio& studio) {
     }
 }
 
+inline void UpdateAutoPlayControls(const HoDoKuStudio& studio) {
+    if (!g_hAutoPlayPlayBtn) return;
+
+    RECT rc{};
+    if (g_hwnd) GetClientRect(g_hwnd, &rc);
+    bool isWide = (rc.right - rc.left) >= 960;
+
+    if (studio.is_auto_playing()) {
+        SetWindowTextW(g_hAutoPlayPlayBtn, isWide ? L"|| Pause" : L"||");
+    } else if (studio.is_auto_play_paused()) {
+        SetWindowTextW(g_hAutoPlayPlayBtn, isWide ? L"▶ Resume" : L"▶");
+    } else {
+        SetWindowTextW(g_hAutoPlayPlayBtn, isWide ? L"▶ Play" : L"▶");
+    }
+    EnableWindow(g_hAutoPlayPlayBtn, !studio.get_board().is_solved());
+
+    if (g_hAutoPlayStopBtn) {
+        SetWindowTextW(g_hAutoPlayStopBtn, isWide ? L"■ Stop" : L"■");
+        EnableWindow(g_hAutoPlayStopBtn, studio.is_auto_playing() || studio.is_auto_play_paused());
+    }
+
+    if (g_hAutoPlayBackBtn) {
+        EnableWindow(g_hAutoPlayBackBtn, studio.can_undo());
+    }
+
+    if (g_hAutoPlayFwdBtn) {
+        EnableWindow(g_hAutoPlayFwdBtn, !studio.get_board().is_solved());
+    }
+
+    int delayMs = studio.get_auto_play_delay();
+    if (g_hAutoPlaySpeedSlider) {
+        int curPos = (int)SendMessageW(g_hAutoPlaySpeedSlider, TBM_GETPOS, 0, 0);
+        if (curPos != delayMs) {
+            SendMessageW(g_hAutoPlaySpeedSlider, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)delayMs);
+        }
+    }
+
+    if (g_hAutoPlaySpeedVal) {
+        std::wstring lbl = std::to_wstring(delayMs) + L" ms";
+        SetWindowTextW(g_hAutoPlaySpeedVal, lbl.c_str());
+    }
+}
+
 inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     if (!g_hStatusBar) return;
 
@@ -423,10 +476,87 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     SendMessageW(g_hStatusBar, SB_SETTEXT, 0, (LPARAM)part1.c_str());
     SendMessageW(g_hStatusBar, SB_SETTEXT, 1, (LPARAM)part2.c_str());
     SendMessageW(g_hStatusBar, SB_SETTEXT, 2, (LPARAM)part3.c_str());
+
+    UpdateAutoPlayControls(studio);
+}
+
+inline void LayoutAutoPlayToolbar(int width) {
+    if (!g_hAutoPlayPlayBtn) return;
+
+    int tbY = 4;
+    int btnH = 26;
+    int startX = 568;
+
+    if (width >= 960) {
+        // Wide toolbar layout
+        if (g_hAutoPlayBackBtn) MoveWindow(g_hAutoPlayBackBtn, startX, tbY, 30, btnH, TRUE);
+        startX += 32;
+
+        if (g_hAutoPlayPlayBtn) MoveWindow(g_hAutoPlayPlayBtn, startX, tbY, 68, btnH, TRUE);
+        startX += 70;
+
+        if (g_hAutoPlayFwdBtn) MoveWindow(g_hAutoPlayFwdBtn, startX, tbY, 30, btnH, TRUE);
+        startX += 32;
+
+        if (g_hAutoPlayStopBtn) {
+            ShowWindow(g_hAutoPlayStopBtn, SW_SHOW);
+            MoveWindow(g_hAutoPlayStopBtn, startX, tbY, 52, btnH, TRUE);
+            startX += 54;
+        }
+
+        if (g_hAutoPlaySpeedLabel) {
+            ShowWindow(g_hAutoPlaySpeedLabel, SW_SHOW);
+            MoveWindow(g_hAutoPlaySpeedLabel, startX + 4, tbY + 5, 38, 18, TRUE);
+            startX += 44;
+        }
+
+        if (g_hAutoPlaySpeedSlider) {
+            ShowWindow(g_hAutoPlaySpeedSlider, SW_SHOW);
+            MoveWindow(g_hAutoPlaySpeedSlider, startX, tbY + 1, 80, btnH - 2, TRUE);
+            startX += 82;
+        }
+
+        if (g_hAutoPlaySpeedVal) {
+            ShowWindow(g_hAutoPlaySpeedVal, SW_SHOW);
+            MoveWindow(g_hAutoPlaySpeedVal, startX + 2, tbY + 5, 48, 18, TRUE);
+        }
+    } else {
+        // Compact toolbar layout (< 960px width)
+        if (g_hAutoPlayBackBtn) MoveWindow(g_hAutoPlayBackBtn, startX, tbY, 28, btnH, TRUE);
+        startX += 30;
+
+        if (g_hAutoPlayPlayBtn) MoveWindow(g_hAutoPlayPlayBtn, startX, tbY, 32, btnH, TRUE);
+        startX += 34;
+
+        if (g_hAutoPlayFwdBtn) MoveWindow(g_hAutoPlayFwdBtn, startX, tbY, 28, btnH, TRUE);
+        startX += 30;
+
+        if (g_hAutoPlayStopBtn) {
+            ShowWindow(g_hAutoPlayStopBtn, SW_SHOW);
+            MoveWindow(g_hAutoPlayStopBtn, startX, tbY, 28, btnH, TRUE);
+            startX += 30;
+        }
+
+        if (g_hAutoPlaySpeedLabel) {
+            ShowWindow(g_hAutoPlaySpeedLabel, SW_HIDE);
+        }
+
+        if (g_hAutoPlaySpeedSlider) {
+            ShowWindow(g_hAutoPlaySpeedSlider, SW_SHOW);
+            MoveWindow(g_hAutoPlaySpeedSlider, startX, tbY + 1, 60, btnH - 2, TRUE);
+            startX += 62;
+        }
+
+        if (g_hAutoPlaySpeedVal) {
+            ShowWindow(g_hAutoPlaySpeedVal, SW_SHOW);
+            MoveWindow(g_hAutoPlaySpeedVal, startX + 2, tbY + 5, 44, 18, TRUE);
+        }
+    }
 }
 
 inline void LayoutHoDoKuControls(HWND hwnd, int width, int height) {
     (void)hwnd;
+    LayoutAutoPlayToolbar(width);
     int toolbarH = 36;
     int statusBarH = 20;
     int hintBoxH = 86;
@@ -596,6 +726,74 @@ inline void CreateHoDoKuUI(HWND hwnd) {
         tbX += w + 3;
         g_toolbarButtons.push_back(btn);
     }
+
+    // Auto-Play & Solving Playback Controls
+    tbX += 8;
+    g_hAutoPlayBackBtn = CreateWindowW(L"BUTTON", L"|◀", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                      tbX, tbY, 30, btnH, hwnd, (HMENU)(INT_PTR)IDC_BTN_AUTOPLAY_BACK, NULL, NULL);
+    SendMessage(g_hAutoPlayBackBtn, WM_SETFONT, (WPARAM)hFont, TRUE);
+    g_toolbarButtons.push_back(g_hAutoPlayBackBtn);
+    tbX += 32;
+
+    g_hAutoPlayPlayBtn = CreateWindowW(L"BUTTON", L"▶ Play", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                      tbX, tbY, 68, btnH, hwnd, (HMENU)(INT_PTR)IDC_BTN_AUTOPLAY_PLAY, NULL, NULL);
+    SendMessage(g_hAutoPlayPlayBtn, WM_SETFONT, (WPARAM)hFont, TRUE);
+    g_toolbarButtons.push_back(g_hAutoPlayPlayBtn);
+    tbX += 70;
+
+    g_hAutoPlayFwdBtn = CreateWindowW(L"BUTTON", L"▶|", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                     tbX, tbY, 30, btnH, hwnd, (HMENU)(INT_PTR)IDC_BTN_AUTOPLAY_FWD, NULL, NULL);
+    SendMessage(g_hAutoPlayFwdBtn, WM_SETFONT, (WPARAM)hFont, TRUE);
+    g_toolbarButtons.push_back(g_hAutoPlayFwdBtn);
+    tbX += 32;
+
+    g_hAutoPlayStopBtn = CreateWindowW(L"BUTTON", L"■ Stop", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                      tbX, tbY, 52, btnH, hwnd, (HMENU)(INT_PTR)IDC_BTN_AUTOPLAY_STOP, NULL, NULL);
+    SendMessage(g_hAutoPlayStopBtn, WM_SETFONT, (WPARAM)hFont, TRUE);
+    g_toolbarButtons.push_back(g_hAutoPlayStopBtn);
+    tbX += 54;
+
+    g_hAutoPlaySpeedLabel = CreateWindowW(L"STATIC", L"Delay:", WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                         tbX, tbY + 5, 38, 18, hwnd, (HMENU)(INT_PTR)IDC_LABEL_AUTOPLAY_SPEED, NULL, NULL);
+    SendMessage(g_hAutoPlaySpeedLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
+    tbX += 42;
+
+    g_hAutoPlaySpeedSlider = CreateWindowW(TRACKBAR_CLASSW, L"",
+                                          WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
+                                          tbX, tbY + 1, 80, btnH - 2, hwnd, (HMENU)(INT_PTR)IDC_SLIDER_AUTOPLAY_SPEED, NULL, NULL);
+    SendMessageW(g_hAutoPlaySpeedSlider, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELONG(100, 2000));
+    SendMessageW(g_hAutoPlaySpeedSlider, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)750);
+    SendMessageW(g_hAutoPlaySpeedSlider, TBM_SETLINESIZE, 0, (LPARAM)50);
+    SendMessageW(g_hAutoPlaySpeedSlider, TBM_SETPAGESIZE, 0, (LPARAM)200);
+    tbX += 82;
+
+    g_hAutoPlaySpeedVal = CreateWindowW(L"STATIC", L"750 ms", WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                       tbX, tbY + 5, 48, 18, hwnd, (HMENU)(INT_PTR)IDC_LABEL_AUTOPLAY_VAL, NULL, NULL);
+    SendMessage(g_hAutoPlaySpeedVal, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    // Native tooltips for playback controls
+    g_hAutoPlayToolTip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
+                                         WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+                                         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                         hwnd, NULL, NULL, NULL);
+    SetWindowPos(g_hAutoPlayToolTip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    auto add_tooltip = [&](HWND hCtrl, const wchar_t* tip) {
+        if (!g_hAutoPlayToolTip || !hCtrl) return;
+        TOOLINFOW ti{};
+        ti.cbSize = sizeof(ti);
+        ti.uFlags = TTF_SUBCLASS | TTF_IDISHWND;
+        ti.hwnd = hwnd;
+        ti.uId = (UINT_PTR)hCtrl;
+        ti.lpszText = const_cast<wchar_t*>(tip);
+        SendMessageW(g_hAutoPlayToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+    };
+
+    add_tooltip(g_hAutoPlayBackBtn, L"Step Backward (F7 / Ctrl+Left)");
+    add_tooltip(g_hAutoPlayPlayBtn, L"Auto-Solve Play / Pause (F5 / Ctrl+P)");
+    add_tooltip(g_hAutoPlayFwdBtn, L"Step Forward (F6 / Ctrl+Right)");
+    add_tooltip(g_hAutoPlayStopBtn, L"Stop Auto-Solve (Esc)");
+    add_tooltip(g_hAutoPlaySpeedSlider, L"Auto-Play Step Delay (100 ms - 2000 ms)");
 
     // 2. Right Tabbed Panel
     g_hTab = CreateWindowW(WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
@@ -794,6 +992,7 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_EXECUTE_HINT, L"&Execute Step\tCtrl+E");
     AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_AUTOPLAY, L"&Auto-Solve Play/Pause\tF5");
+    AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_AUTOPLAY_STOP, L"St&op Auto-Solve\tEsc");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_STEP_FORWARD, L"Step &Forward\tF6");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_STEP_BACKWARD, L"Step &Backward\tF7");
     AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);

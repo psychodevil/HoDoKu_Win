@@ -569,6 +569,30 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
     }
 
+    case WM_HSCROLL: {
+        if ((HWND)lParam == g_hAutoPlaySpeedSlider && g_studio) {
+            int pos = (int)SendMessageW(g_hAutoPlaySpeedSlider, TBM_GETPOS, 0, 0);
+            pos = std::clamp((pos / 50) * 50, 50, 3000);
+            g_studio->set_auto_play_delay(pos);
+            if (g_hAutoPlaySpeedVal) {
+                std::wstring lbl = std::to_wstring(pos) + L" ms";
+                SetWindowTextW(g_hAutoPlaySpeedVal, lbl.c_str());
+            }
+            if (g_studio->is_auto_playing()) {
+                SetTimer(hwnd, IDT_AUTOPLAY, g_studio->get_auto_play_delay(), NULL);
+            }
+            UpdateStatusBarText(*g_studio);
+            return 0;
+        }
+        break;
+    }
+
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (INT_PTR)GetSysColorBrush(COLOR_BTNFACE);
+    }
+
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
@@ -823,7 +847,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_studio->cancel_hint();
             UpdateHintBoxText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
-        } else if (id == IDM_PUZZLE_AUTOPLAY) {
+        } else if (id == IDM_PUZZLE_AUTOPLAY || id == IDC_BTN_AUTOPLAY_PLAY) {
             if (g_studio->is_auto_playing()) {
                 g_studio->pause_auto_play();
                 KillTimer(hwnd, IDT_AUTOPLAY);
@@ -843,7 +867,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             KillTimer(hwnd, IDT_AUTOPLAY);
             UpdateStatusBarText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
-        } else if (id == IDM_PUZZLE_STEP_FORWARD) {
+        } else if (id == IDC_BTN_AUTOPLAY_STOP) {
+            g_studio->stop_auto_play();
+            KillTimer(hwnd, IDT_AUTOPLAY);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_PUZZLE_STEP_FORWARD || id == IDC_BTN_AUTOPLAY_FWD) {
             if (g_studio->is_auto_playing()) {
                 g_studio->pause_auto_play();
                 KillTimer(hwnd, IDT_AUTOPLAY);
@@ -854,7 +884,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             UpdateHintBoxText(*g_studio);
             UpdateStatusBarText(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
-        } else if (id == IDM_PUZZLE_STEP_BACKWARD) {
+        } else if (id == IDM_PUZZLE_STEP_BACKWARD || id == IDC_BTN_AUTOPLAY_BACK) {
             if (g_studio->is_auto_playing()) {
                 g_studio->pause_auto_play();
                 KillTimer(hwnd, IDT_AUTOPLAY);
@@ -1347,7 +1377,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     INITCOMMONCONTROLSEX icex;
     icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-    icex.dwICC = ICC_TAB_CLASSES | ICC_LISTVIEW_CLASSES | ICC_BAR_CLASSES;
+    icex.dwICC = ICC_TAB_CLASSES | ICC_LISTVIEW_CLASSES | ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
     InitCommonControlsEx(&icex);
 
     const wchar_t CLASS_NAME[] = L"HoDoKuNativeStudioWindow";

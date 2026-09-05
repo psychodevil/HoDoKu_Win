@@ -93,8 +93,45 @@ int main() {
     assert(studio.get_auto_play_state() == AutoPlayState::Stopped);
     std::cout << "[TEST] Auto-Play on solved puzzle rejection... PASSED\n";
 
+    // 9. Dynamic speed slider adjustment during playback
+    studio.import_from_string(PUZZLE_LIBRARY[1].second); // Medium puzzle
+    bool started2 = studio.start_auto_play(750);
+    assert(started2);
+    assert(studio.is_auto_playing());
+    assert(studio.get_auto_play_delay() == 750);
+
+    // Change speed slider live while playing
+    studio.set_auto_play_delay(250);
+    assert(studio.get_auto_play_delay() == 250);
+    assert(studio.is_auto_playing());
+    assert(studio.step_auto_play());
+
+    // Change speed slider live while paused
+    studio.pause_auto_play();
+    assert(studio.is_auto_play_paused());
+    studio.set_auto_play_delay(1500);
+    assert(studio.get_auto_play_delay() == 1500);
+    studio.resume_auto_play();
+    assert(studio.is_auto_playing());
+    std::cout << "[TEST] Dynamic speed slider adjustment during playback... PASSED\n";
+
+    // 10. Toolbar Stop action & manual stepping after stop
+    studio.stop_auto_play();
+    assert(studio.get_auto_play_state() == AutoPlayState::Stopped);
+    assert(!studio.is_auto_playing());
+    assert(!studio.is_auto_play_paused());
+    assert(!studio.step_auto_play()); // Stepping auto-play while stopped must return false
+
+    // Manual step forward and step backward when stopped
+    bool manualFwd = studio.step_forward();
+    assert(manualFwd);
+    bool manualBack = studio.step_backward();
+    assert(manualBack);
+    std::cout << "[TEST] Toolbar Stop action and manual stepping... PASSED\n";
+
     std::cout << "========================================\n";
     std::cout << " ALL Auto-Play Tests PASSED!            \n";
     std::cout << "========================================\n";
     return 0;
 }
+
