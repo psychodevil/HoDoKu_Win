@@ -71,7 +71,7 @@ public:
                 }
 
                 if (needGen && m_bgRunning) {
-                    BoardState puz = m_generator.generate_puzzle(targetLvl, SymmetryType::Rotational180, 8);
+                    BoardState puz = m_generator.generate_puzzle(targetLvl, SymmetryType::Rotational180, 8, m_variant);
                     {
                         std::lock_guard<std::mutex> lock(m_bgMtx);
                         m_bgCache[targetLvl].push(puz);
@@ -149,7 +149,7 @@ public:
         BoardState puz;
 
         if (m_gameMode == GameMode::Practicing && !m_trainingTechniques.empty()) {
-            puz = m_generator.generate_training_puzzle(m_trainingTechniques, SymmetryType::Rotational180, 25);
+            puz = m_generator.generate_training_puzzle(m_trainingTechniques, SymmetryType::Rotational180, 25, m_variant);
         } else {
             bool fromCache = false;
             {
@@ -163,7 +163,7 @@ public:
             if (fromCache) {
                 m_bgCv.notify_one();
             } else {
-                puz = m_generator.generate_puzzle(lvl, SymmetryType::Rotational180, 8);
+                puz = m_generator.generate_puzzle(lvl, SymmetryType::Rotational180, 8, m_variant);
             }
         }
 
@@ -760,6 +760,28 @@ public:
         m_fasSteps = StepFinder::find_all_steps(m_board);
     }
 
+    [[nodiscard]] SudokuVariant get_variant() const noexcept {
+        return m_variant;
+    }
+
+    void set_variant(SudokuVariant variant) {
+        if (m_variant != variant) {
+            m_variant = variant;
+            m_solver.set_variant(variant);
+            {
+                std::lock_guard<std::mutex> lock(m_bgMtx);
+                for (int l = 0; l <= 4; ++l) {
+                    while (!m_bgCache[static_cast<DifficultyLevel>(l)].empty()) {
+                        m_bgCache[static_cast<DifficultyLevel>(l)].pop();
+                    }
+                }
+            }
+            m_bgCv.notify_one();
+            recalculate_solution_path();
+            recalculate_fas();
+        }
+    }
+
     void select_step(const Step& s) {
         m_selectedStep = s;
         m_hintLevel = HintLevel::Concrete;
@@ -1105,7 +1127,7 @@ public:
         std::vector<BackdoorCandidate> backdoors;
         if (m_board.is_solved()) return backdoors;
 
-        DlxSolver solver;
+        DlxSolver solver(m_variant);
         auto sol = solver.solve_one(m_board);
         if (!sol.has_value()) return backdoors;
 
@@ -1322,6 +1344,7 @@ private:
     BoardState m_initialBoard;
     DlxSolver m_solver;
     SudokuGenerator m_generator;
+    SudokuVariant m_variant{SudokuVariant::Standard};
     GameMode m_gameMode{GameMode::Playing};
 
     std::vector<StudioSnapshot> m_undoStack;

@@ -35,41 +35,58 @@ public:
     explicit SudokuGenerator(unsigned int seed) : m_rng(seed) {}
 
     // Generates a random valid full 81-cell terminal grid
-    BoardState generate_terminal_grid() {
+    BoardState generate_terminal_grid(SudokuVariant variant = SudokuVariant::Standard) {
+        DlxSolver dlx(variant);
         while (true) {
             BoardState board;
-
-            // Fill independent diagonal boxes 0, 4, 8 with random permutations
             std::array<int, 9> digits{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-            // Box 0 (top-left)
-            std::shuffle(digits.begin(), digits.end(), m_rng);
-            int idx = 0;
-            for (int r = 0; r < 3; ++r) {
-                for (int c = 0; c < 3; ++c) {
-                    board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
+            if (variant == SudokuVariant::Standard) {
+                // Fill independent diagonal boxes 0, 4, 8 with random permutations
+                // Box 0 (top-left)
+                std::shuffle(digits.begin(), digits.end(), m_rng);
+                int idx = 0;
+                for (int r = 0; r < 3; ++r) {
+                    for (int c = 0; c < 3; ++c) {
+                        board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
+                    }
+                }
+
+                // Box 4 (center)
+                std::shuffle(digits.begin(), digits.end(), m_rng);
+                idx = 0;
+                for (int r = 3; r < 6; ++r) {
+                    for (int c = 3; c < 6; ++c) {
+                        board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
+                    }
+                }
+
+                // Box 8 (bottom-right)
+                std::shuffle(digits.begin(), digits.end(), m_rng);
+                idx = 0;
+                for (int r = 6; r < 9; ++r) {
+                    for (int c = 6; c < 9; ++c) {
+                        board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
+                    }
+                }
+            } else {
+                // For variants, seed with Box 0 and center cell (40)
+                std::shuffle(digits.begin(), digits.end(), m_rng);
+                int idx = 0;
+                for (int r = 0; r < 3; ++r) {
+                    for (int c = 0; c < 3; ++c) {
+                        board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
+                    }
+                }
+                std::shuffle(digits.begin(), digits.end(), m_rng);
+                for (int d : digits) {
+                    if (board.has_candidate(40, d)) {
+                        board.set_value(40, static_cast<uint8_t>(d));
+                        break;
+                    }
                 }
             }
 
-            // Box 4 (center)
-            std::shuffle(digits.begin(), digits.end(), m_rng);
-            idx = 0;
-            for (int r = 3; r < 6; ++r) {
-                for (int c = 3; c < 6; ++c) {
-                    board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
-                }
-            }
-
-            // Box 8 (bottom-right)
-            std::shuffle(digits.begin(), digits.end(), m_rng);
-            idx = 0;
-            for (int r = 6; r < 9; ++r) {
-                for (int c = 6; c < 9; ++c) {
-                    board.set_value(cell_index(r, c), static_cast<uint8_t>(digits[idx++]));
-                }
-            }
-
-            DlxSolver dlx;
             auto sol = dlx.solve_one(board);
             if (sol.has_value()) {
                 return *sol;
@@ -139,7 +156,7 @@ public:
     }
 
     // Digs clues from a full grid respecting symmetry to produce a unique-solution puzzle
-    BoardState dig_puzzle(const BoardState& full_board, SymmetryType symmetry) {
+    BoardState dig_puzzle(const BoardState& full_board, SymmetryType symmetry, SudokuVariant variant = SudokuVariant::Standard) {
         std::array<uint8_t, TOTAL_CELLS> values;
         for (int i = 0; i < TOTAL_CELLS; ++i) {
             values[i] = full_board.get_value(i);
@@ -148,7 +165,7 @@ public:
         auto orbits = compute_orbits(symmetry);
         std::shuffle(orbits.begin(), orbits.end(), m_rng);
 
-        DlxSolver dlx;
+        DlxSolver dlx(variant);
 
         auto make_board = [&]() {
             std::string s;
@@ -167,7 +184,7 @@ public:
             }
 
             BoardState test_board = make_board();
-            // Uniqueness check: must have exactly 1 solution
+            // Uniqueness check: must have exactly 1 solution under this variant
             if (dlx.count_solutions(test_board, 2) != 1) {
                 // Not unique, restore orbit
                 for (const auto& p : saved) {
@@ -206,13 +223,16 @@ public:
     }
 
     // Generates a puzzle matching target difficulty level
-    BoardState generate_puzzle(DifficultyLevel target_level, SymmetryType symmetry = SymmetryType::Rotational180, int max_attempts = 15) {
+    BoardState generate_puzzle(DifficultyLevel target_level,
+                               SymmetryType symmetry = SymmetryType::Rotational180,
+                               int max_attempts = 15,
+                               SudokuVariant variant = SudokuVariant::Standard) {
         BoardState best_puzzle;
         DifficultyLevel best_level = DifficultyLevel::Easy;
 
         for (int attempt = 0; attempt < max_attempts; ++attempt) {
-            BoardState full = generate_terminal_grid();
-            BoardState puzzle = dig_puzzle(full, symmetry);
+            BoardState full = generate_terminal_grid(variant);
+            BoardState puzzle = dig_puzzle(full, symmetry, variant);
 
             int score = 0;
             DifficultyLevel lvl = evaluate_difficulty(puzzle, score);
@@ -239,14 +259,17 @@ public:
         return best_puzzle;
     }
 
-    BoardState generate_training_puzzle(const std::vector<TechniqueType>& target_techniques, SymmetryType symmetry = SymmetryType::Rotational180, int max_attempts = 30) {
+    BoardState generate_training_puzzle(const std::vector<TechniqueType>& target_techniques,
+                                        SymmetryType symmetry = SymmetryType::Rotational180,
+                                        int max_attempts = 30,
+                                        SudokuVariant variant = SudokuVariant::Standard) {
         if (target_techniques.empty()) {
-            return generate_puzzle(DifficultyLevel::Medium, symmetry, max_attempts);
+            return generate_puzzle(DifficultyLevel::Medium, symmetry, max_attempts, variant);
         }
 
         for (int attempt = 0; attempt < max_attempts; ++attempt) {
-            BoardState full = generate_terminal_grid();
-            BoardState puzzle = dig_puzzle(full, symmetry);
+            BoardState full = generate_terminal_grid(variant);
+            BoardState puzzle = dig_puzzle(full, symmetry, variant);
 
             BoardState sim = puzzle;
             bool found_target = false;
@@ -395,7 +418,7 @@ public:
     // Digs clues from full_board matching pattern_mask.
     // Retains clues ONLY on cells where pattern_mask.test(cell) is true.
     // Returns the board if it has a unique solution, otherwise std::nullopt.
-    std::optional<BoardState> dig_pattern(const BoardState& full_board, const BitSet81& pattern_mask) {
+    std::optional<BoardState> dig_pattern(const BoardState& full_board, const BitSet81& pattern_mask, SudokuVariant variant = SudokuVariant::Standard) {
         if (pattern_mask.count() < 17) {
             return std::nullopt;
         }
@@ -411,7 +434,7 @@ public:
         }
 
         BoardState test_board(s);
-        DlxSolver dlx;
+        DlxSolver dlx(variant);
         if (dlx.count_solutions(test_board, 2) == 1) {
             return test_board;
         }
@@ -420,7 +443,10 @@ public:
 
     // Generates a random puzzle whose clues strictly match pattern_mask.
     // Tries up to max_attempts random terminal grids.
-    std::optional<BoardState> generate_pattern_puzzle(const BitSet81& pattern_mask, int max_attempts = 1000, std::function<bool(int)> progress_cb = nullptr) {
+    std::optional<BoardState> generate_pattern_puzzle(const BitSet81& pattern_mask,
+                                                      int max_attempts = 1000,
+                                                      std::function<bool(int)> progress_cb = nullptr,
+                                                      SudokuVariant variant = SudokuVariant::Standard) {
         if (pattern_mask.count() < 17) {
             return std::nullopt;
         }
@@ -430,8 +456,8 @@ public:
                 return std::nullopt;
             }
 
-            BoardState full = generate_terminal_grid();
-            auto puzzle = dig_pattern(full, pattern_mask);
+            BoardState full = generate_terminal_grid(variant);
+            auto puzzle = dig_pattern(full, pattern_mask, variant);
             if (puzzle.has_value()) {
                 return puzzle;
             }

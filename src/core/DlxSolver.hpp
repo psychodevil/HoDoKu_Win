@@ -4,14 +4,21 @@
 #include <array>
 #include <limits>
 #include <span>
+#include <optional>
 #include "Types.hpp"
 #include "BoardState.hpp"
+#include "DiagonalBitboards.hpp"
+#include "HyperSudokuWindows.hpp"
 
 namespace hodoku::core {
 
 class DlxSolver {
 public:
-    static constexpr int NUM_COLS = 324; // 81 cell + 81 row + 81 col + 81 box
+    static constexpr int NUM_COLS_BASE = 324; // 81 cell + 81 row + 81 col + 81 box
+    static constexpr int NUM_COLS_DIAG = 18;  // 9 main diagonal + 9 anti-diagonal
+    static constexpr int NUM_COLS_HYPER = 36; // 4 windows * 9 digits
+    static constexpr int NUM_COLS = NUM_COLS_BASE; // Standard backwards-compatibility alias
+    static constexpr int MAX_COLS = NUM_COLS_BASE + NUM_COLS_DIAG + NUM_COLS_HYPER; // 378
     static constexpr int MAX_CANDIDATE_ROWS = 729; // 9 * 9 * 9
 
     struct Node {
@@ -28,19 +35,49 @@ public:
         int digit{0};
     };
 
-    DlxSolver() {
+    explicit DlxSolver(SudokuVariant variant = SudokuVariant::Standard)
+        : m_variant(variant) {
         init_matrix();
     }
 
+    void set_variant(SudokuVariant variant) {
+        if (m_variant != variant) {
+            m_variant = variant;
+            init_matrix();
+        }
+    }
+
+    [[nodiscard]] SudokuVariant get_variant() const noexcept {
+        return m_variant;
+    }
+
+    [[nodiscard]] int active_columns() const noexcept {
+        return m_active_cols;
+    }
+
+    [[nodiscard]] bool has_diagonal() const noexcept {
+        return has_diagonal_constraint(m_variant);
+    }
+
+    [[nodiscard]] bool has_hyper() const noexcept {
+        return has_hyper_constraint(m_variant);
+    }
+
     // Counts solutions up to max_limit (e.g., max_limit=2 to check uniqueness)
-    int count_solutions(const BoardState& board, int max_limit = 2) {
+    int count_solutions(const BoardState& board, int max_limit = 2, std::optional<SudokuVariant> variant = std::nullopt) {
+        if (variant.has_value() && *variant != m_variant) {
+            set_variant(*variant);
+        }
         std::vector<BoardState> solutions;
         solve(board, solutions, max_limit);
         return static_cast<int>(solutions.size());
     }
 
     // Solves the board and returns the first solution if found
-    std::optional<BoardState> solve_one(const BoardState& board) {
+    std::optional<BoardState> solve_one(const BoardState& board, std::optional<SudokuVariant> variant = std::nullopt) {
+        if (variant.has_value() && *variant != m_variant) {
+            set_variant(*variant);
+        }
         std::vector<BoardState> solutions;
         solve(board, solutions, 1);
         if (!solutions.empty()) {
@@ -50,7 +87,10 @@ public:
     }
 
     // Finds up to max_solutions
-    void solve(const BoardState& board, std::vector<BoardState>& solutions, int max_solutions = 1) {
+    void solve(const BoardState& board, std::vector<BoardState>& solutions, int max_solutions = 1, std::optional<SudokuVariant> variant = std::nullopt) {
+        if (variant.has_value() && *variant != m_variant) {
+            set_variant(*variant);
+        }
         init_matrix();
 
         // Apply board constraints (givens / values already placed)
@@ -75,7 +115,10 @@ public:
 
         // Apply given choices
         for (int row_id : rows_to_cover) {
-            cover_by_row(row_id);
+            if (!cover_by_row(row_id)) {
+                // Given conflict detected (e.g., house/diagonal/window duplicate)
+                return;
+            }
         }
 
         std::vector<int> solution_rows;
@@ -84,23 +127,48 @@ public:
 
 private:
     std::vector<Node> m_nodes;
-    std::array<int, NUM_COLS + 1> m_col_sizes{};
+    std::array<int, MAX_COLS + 1> m_col_sizes{};
+    std::array<bool, MAX_COLS + 1> m_col_covered{};
     std::array<int, MAX_CANDIDATE_ROWS> m_row_first_node{};
     std::array<CandidateChoice, MAX_CANDIDATE_ROWS> m_row_to_choice{};
+    int m_active_cols{NUM_COLS_BASE};
+    SudokuVariant m_variant{SudokuVariant::Standard};
 
     static constexpr int ROOT = 0;
 
     void init_matrix() {
         m_nodes.clear();
-        m_nodes.reserve(4000);
+        m_nodes.reserve(5000);
         m_col_sizes.fill(0);
+        m_col_covered.fill(false);
         m_row_first_node.fill(-1);
+
+        int num_cols = NUM_COLS_BASE;
+        int diag_main_start = -1;
+        int diag_anti_start = -1;
+        int hyper_start = -1;
+
+        bool with_diag = has_diagonal_constraint(m_variant);
+        bool with_hyper = has_hyper_constraint(m_variant);
+
+        if (with_diag) {
+            diag_main_start = 1 + num_cols;
+            diag_anti_start = 1 + num_cols + 9;
+            num_cols += NUM_COLS_DIAG;
+        }
+
+        if (with_hyper) {
+            hyper_start = 1 + num_cols;
+            num_cols += NUM_COLS_HYPER;
+        }
+
+        m_active_cols = num_cols;
 
         // Node 0 is ROOT
         m_nodes.push_back(Node{ROOT, ROOT, ROOT, ROOT, ROOT, -1});
 
-        // Add 324 column headers
-        for (int c = 1; c <= NUM_COLS; ++c) {
+        // Add column headers for 1 .. m_active_cols
+        for (int c = 1; c <= m_active_cols; ++c) {
             int prev = c - 1;
             m_nodes.push_back(Node{prev, ROOT, c, c, c, -1});
             m_nodes[prev].right = c;
@@ -122,10 +190,33 @@ private:
                 int col_col = 1 + 162 + c * 9 + (d - 1);
                 int col_box = 1 + 243 + b * 9 + (d - 1);
 
-                std::array<int, 4> cols = {col_cell, col_row, col_col, col_box};
+                std::array<int, 6> cols{};
+                int col_count = 0;
+                cols[col_count++] = col_cell;
+                cols[col_count++] = col_row;
+                cols[col_count++] = col_col;
+                cols[col_count++] = col_box;
+
+                if (with_diag) {
+                    if (is_main_diagonal_cell(cell)) {
+                        cols[col_count++] = diag_main_start + (d - 1);
+                    }
+                    if (is_anti_diagonal_cell(cell)) {
+                        cols[col_count++] = diag_anti_start + (d - 1);
+                    }
+                }
+
+                if (with_hyper) {
+                    if (is_hyper_window_cell(cell)) {
+                        int w = get_hyper_window_index(cell);
+                        cols[col_count++] = hyper_start + w * 9 + (d - 1);
+                    }
+                }
+
                 int first_node = -1;
 
-                for (int col_idx : cols) {
+                for (int i = 0; i < col_count; ++i) {
+                    int col_idx = cols[i];
                     int node_idx = static_cast<int>(m_nodes.size());
                     int up = m_nodes[col_idx].up;
 
@@ -150,6 +241,7 @@ private:
     }
 
     void cover_column(int c) noexcept {
+        m_col_covered[c] = true;
         m_nodes[m_nodes[c].right].left = m_nodes[c].left;
         m_nodes[m_nodes[c].left].right = m_nodes[c].right;
 
@@ -172,17 +264,30 @@ private:
         }
         m_nodes[m_nodes[c].right].left = c;
         m_nodes[m_nodes[c].left].right = c;
+        m_col_covered[c] = false;
     }
 
-    void cover_by_row(int row_id) {
+    bool cover_by_row(int row_id) {
         int first = m_row_first_node[row_id];
-        if (first == -1) return;
+        if (first == -1) return false;
 
+        // Check if any column for this row is already covered
         int curr = first;
+        do {
+            int col = m_nodes[curr].col;
+            if (m_col_covered[col]) {
+                return false;
+            }
+            curr = m_nodes[curr].right;
+        } while (curr != first);
+
+        curr = first;
         do {
             cover_column(m_nodes[curr].col);
             curr = m_nodes[curr].right;
         } while (curr != first);
+
+        return true;
     }
 
     void remove_row(int row_id) {

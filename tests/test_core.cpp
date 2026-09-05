@@ -19,6 +19,8 @@
 #include "core/SueDeCoq.hpp"
 #include "core/StepFinder.hpp"
 #include "core/Generator.hpp"
+#include "core/DiagonalBitboards.hpp"
+#include "core/HyperSudokuWindows.hpp"
 
 using namespace hodoku::core;
 
@@ -114,25 +116,125 @@ void test_board_state() {
 }
 
 void test_dlx_solver() {
-    std::cout << "[TEST] DlxSolver exact cover solver...";
+    std::cout << "[TEST] DlxSolver exact cover solver (Standard, Diagonal, Hyper, and X-Windoku)...";
 
+    // 1. Column counts across variants
+    DlxSolver solver_std(SudokuVariant::Standard);
+    assert(solver_std.active_columns() == 324);
+    assert(!solver_std.has_diagonal());
+    assert(!solver_std.has_hyper());
+
+    DlxSolver solver_diag(SudokuVariant::Diagonal);
+    assert(solver_diag.active_columns() == 342); // 324 + 18
+    assert(solver_diag.has_diagonal());
+    assert(!solver_diag.has_hyper());
+
+    DlxSolver solver_hyper(SudokuVariant::Hyper);
+    assert(solver_hyper.active_columns() == 360); // 324 + 36
+    assert(!solver_hyper.has_diagonal());
+    assert(solver_hyper.has_hyper());
+
+    DlxSolver solver_x_hyper(SudokuVariant::DiagonalHyper);
+    assert(solver_x_hyper.active_columns() == 378); // 324 + 18 + 36
+    assert(solver_x_hyper.has_diagonal());
+    assert(solver_x_hyper.has_hyper());
+
+    // 2. Standard puzzle benchmark
     std::string easy_puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079";
     BoardState board(easy_puzzle);
 
-    DlxSolver solver;
-    assert(solver.count_solutions(board, 2) == 1);
+    assert(solver_std.count_solutions(board, 2) == 1);
 
-    auto solution = solver.solve_one(board);
+    auto solution = solver_std.solve_one(board);
     assert(solution.has_value());
     assert(solution->is_solved());
     assert(solution->is_valid());
 
     std::string escargot = "100007090030020008009600500005300900010080002600004000300000010040000007007000300";
     BoardState escargot_board(escargot);
-    auto escargot_sol = solver.solve_one(escargot_board);
+    auto escargot_sol = solver_std.solve_one(escargot_board);
     assert(escargot_sol.has_value());
     assert(escargot_sol->is_solved());
     assert(escargot_sol->is_valid());
+
+    // 3. Diagonal Sudoku (X-Sudoku) solving from empty grid
+    BoardState empty_board;
+    auto diag_sol = solver_diag.solve_one(empty_board);
+    assert(diag_sol.has_value());
+    assert(diag_sol->is_solved());
+    assert(diag_sol->is_valid());
+
+    CandidateMask main_diag_digits = 0;
+    CandidateMask anti_diag_digits = 0;
+    for (int i = 0; i < 9; ++i) {
+        main_diag_digits |= digit_to_mask(diag_sol->get_value(cell_index(i, i)));
+        anti_diag_digits |= digit_to_mask(diag_sol->get_value(cell_index(i, 8 - i)));
+    }
+    assert(main_diag_digits == ALL_CANDIDATES_MASK);
+    assert(anti_diag_digits == ALL_CANDIDATES_MASK);
+
+    // 4. Hyper-Sudoku (Windoku) solving from empty grid
+    auto hyper_sol = solver_hyper.solve_one(empty_board);
+    assert(hyper_sol.has_value());
+    assert(hyper_sol->is_solved());
+    assert(hyper_sol->is_valid());
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_digits = 0;
+        for (int cell : get_hyper_window_cells(w)) {
+            win_digits |= digit_to_mask(hyper_sol->get_value(cell));
+        }
+        assert(win_digits == ALL_CANDIDATES_MASK);
+    }
+
+    // 5. Combined Diagonal Hyper-Sudoku (X-Windoku) solving
+    auto x_hyper_sol = solver_x_hyper.solve_one(empty_board);
+    assert(x_hyper_sol.has_value());
+    assert(x_hyper_sol->is_solved());
+    assert(x_hyper_sol->is_valid());
+
+    CandidateMask xh_main = 0, xh_anti = 0;
+    for (int i = 0; i < 9; ++i) {
+        xh_main |= digit_to_mask(x_hyper_sol->get_value(cell_index(i, i)));
+        xh_anti |= digit_to_mask(x_hyper_sol->get_value(cell_index(i, 8 - i)));
+    }
+    assert(xh_main == ALL_CANDIDATES_MASK);
+    assert(xh_anti == ALL_CANDIDATES_MASK);
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_digits = 0;
+        for (int cell : get_hyper_window_cells(w)) {
+            win_digits |= digit_to_mask(x_hyper_sol->get_value(cell));
+        }
+        assert(win_digits == ALL_CANDIDATES_MASK);
+    }
+
+    // 6. Constraint enforcement & contradiction tests
+    // Place two identical digits in cells that are not row/col/box peers, but ARE diagonal peers:
+    // Cell (0,0) [row 0, col 0, box 0] and Cell (8,8) [row 8, col 8, box 8]
+    BoardState diag_conflict;
+    diag_conflict.set_value(cell_index(0, 0), 9);
+    diag_conflict.set_value(cell_index(8, 8), 9);
+
+    // Standard solver: valid, can find solutions
+    assert(solver_std.count_solutions(diag_conflict, 1) > 0);
+    // Diagonal solver: contradictory, must find 0 solutions!
+    assert(solver_diag.count_solutions(diag_conflict, 1) == 0);
+
+    // Place two identical digits in cells that are not row/col/box peers, but ARE in the same Hyper window:
+    // In TopLeft window (r1-3, c1-3): Cell (1,1) [row 1, col 1, box 0] and Cell (3,3) [row 3, col 3, box 4]
+    BoardState hyper_conflict;
+    hyper_conflict.set_value(cell_index(1, 1), 7);
+    hyper_conflict.set_value(cell_index(3, 3), 7);
+
+    // Standard solver: valid, can find solutions
+    assert(solver_std.count_solutions(hyper_conflict, 1) > 0);
+    // Hyper solver: contradictory, must find 0 solutions!
+    assert(solver_hyper.count_solutions(hyper_conflict, 1) == 0);
+
+    // 7. Dynamic variant switching via parameter override
+    assert(solver_std.count_solutions(diag_conflict, 1, SudokuVariant::Diagonal) == 0);
+    assert(solver_std.count_solutions(hyper_conflict, 1, SudokuVariant::Hyper) == 0);
 
     std::cout << " PASSED\n";
 }
@@ -332,6 +434,39 @@ void test_generator() {
     DifficultyLevel lvl = gen.evaluate_difficulty(easyPuz, score);
     std::cout << " Generated " << difficulty_name(lvl) << " puzzle (Score: " << score << ", Clues: " << easyPuz.get_givens().count() << ")!\n";
 
+    // Variant generator tests
+    std::cout << "  -> Testing Diagonal Sudoku (X-Sudoku) terminal generation and clue digging...";
+    BoardState diag_terminal = gen.generate_terminal_grid(SudokuVariant::Diagonal);
+    assert(diag_terminal.unfilled_count() == 0);
+    CandidateMask d_main = 0, d_anti = 0;
+    for (int i = 0; i < 9; ++i) {
+        d_main |= digit_to_mask(diag_terminal.get_value(cell_index(i, i)));
+        d_anti |= digit_to_mask(diag_terminal.get_value(cell_index(i, 8 - i)));
+    }
+    assert(d_main == ALL_CANDIDATES_MASK);
+    assert(d_anti == ALL_CANDIDATES_MASK);
+
+    BoardState diag_puzzle = gen.dig_puzzle(diag_terminal, SymmetryType::Rotational180, SudokuVariant::Diagonal);
+    DlxSolver dlx_diag(SudokuVariant::Diagonal);
+    assert(dlx_diag.count_solutions(diag_puzzle, 2) == 1);
+    std::cout << " PASSED (" << diag_puzzle.get_givens().count() << " clues)\n";
+
+    std::cout << "  -> Testing Hyper-Sudoku (Windoku) terminal generation and clue digging...";
+    BoardState hyper_terminal = gen.generate_terminal_grid(SudokuVariant::Hyper);
+    assert(hyper_terminal.unfilled_count() == 0);
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_mask = 0;
+        for (int c : get_hyper_window_cells(w)) {
+            win_mask |= digit_to_mask(hyper_terminal.get_value(c));
+        }
+        assert(win_mask == ALL_CANDIDATES_MASK);
+    }
+
+    BoardState hyper_puzzle = gen.dig_puzzle(hyper_terminal, SymmetryType::Rotational180, SudokuVariant::Hyper);
+    DlxSolver dlx_hyper(SudokuVariant::Hyper);
+    assert(dlx_hyper.count_solutions(hyper_puzzle, 2) == 1);
+    std::cout << " PASSED (" << hyper_puzzle.get_givens().count() << " clues)\n";
+
     std::cout << "[TEST] Procedural Generator & Symmetries... PASSED\n";
 }
 
@@ -526,6 +661,198 @@ void test_advanced_patterns() {
     std::cout << "\n[TEST] Advanced Solver Patterns (ER, Dual ER, Grouped AIC)... PASSED\n";
 }
 
+void test_diagonal_bitboards() {
+    std::cout << "[TEST] DiagonalBitboards (X-Sudoku constraints and peer sets)...";
+
+    // 1. Bitmasks and counts
+    const auto& main_diag = get_main_diagonal_bitset();
+    const auto& anti_diag = get_anti_diagonal_bitset();
+    const auto& all_diags = get_all_diagonals_bitset();
+
+    assert(main_diag.count() == 9);
+    assert(anti_diag.count() == 9);
+    assert(all_diags.count() == 17); // 9 + 9 - 1 (cell 40 intersection)
+
+    // Center cell (40 = r4c4) is the only intersection
+    BitSet81 intersection = main_diag & anti_diag;
+    assert(intersection.count() == 1);
+    assert(intersection.test(40));
+    assert(DIAGONALS.intersection_mask == intersection);
+
+    // 2. Cell coordinates & membership
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+
+        bool expected_main = (r == c);
+        bool expected_anti = (r + c == 8);
+        bool expected_any = expected_main || expected_anti;
+        int expected_count = (expected_main ? 1 : 0) + (expected_anti ? 1 : 0);
+
+        assert(is_main_diagonal_cell(cell) == expected_main);
+        assert(is_anti_diagonal_cell(cell) == expected_anti);
+        assert(is_diagonal_cell(cell) == expected_any);
+        assert(get_diagonal_membership_count(cell) == expected_count);
+
+        // Diagonal peer bitset validation
+        const auto& diag_peers = get_diagonal_peer_bitset(cell);
+        assert(!diag_peers.test(cell)); // Cannot be peer to oneself
+
+        if (!expected_any) {
+            assert(diag_peers.empty());
+            assert(get_x_peer_count(cell) == 20);
+            assert(get_x_peer_bitset(cell) == GRID.peer_bitsets[cell]);
+        } else if (cell == 40) {
+            // Center cell belongs to both diagonals (8 peers on each = 16 diagonal peers)
+            assert(diag_peers.count() == 16);
+            assert(get_x_peer_count(cell) == 32);
+        } else {
+            // Non-center diagonal cell belongs to 1 diagonal (8 diagonal peers)
+            assert(diag_peers.count() == 8);
+            assert(get_x_peer_count(cell) == 26);
+        }
+
+        // Full X-Sudoku peers must contain standard peers
+        const auto& x_peers = get_x_peer_bitset(cell);
+        assert(GRID.peer_bitsets[cell].is_subset_of(x_peers));
+        assert(diag_peers.is_subset_of(x_peers));
+        assert(!x_peers.test(cell));
+
+        // X-Sudoku peer list consistency
+        const auto& peer_list = get_x_peer_cells(cell);
+        int count = get_x_peer_count(cell);
+        for (int i = 0; i < count; ++i) {
+            assert(x_peers.test(peer_list[i]));
+        }
+    }
+
+    // 3. Symmetry of X-Sudoku peer relationships: A in peers(B) <=> B in peers(A)
+    for (int a = 0; a < TOTAL_CELLS; ++a) {
+        for (int b = 0; b < TOTAL_CELLS; ++b) {
+            assert(get_x_peer_bitset(a).test(b) == get_x_peer_bitset(b).test(a));
+        }
+    }
+
+    // 4. House indexing and cell arrays
+    const auto& main_cells = get_diagonal_house_cells(DiagonalType::Main);
+    const auto& anti_cells = get_diagonal_house_cells(DiagonalType::Anti);
+
+    for (int i = 0; i < 9; ++i) {
+        assert(main_cells[i] == cell_index(i, i));
+        assert(anti_cells[i] == cell_index(i, 8 - i));
+    }
+
+    assert(get_diagonal_house_bitset(DiagonalType::Main) == main_diag);
+    assert(get_diagonal_house_bitset(DiagonalType::Anti) == anti_diag);
+
+    assert(get_diagonal_name(DiagonalType::Main) == "Main Diagonal (\\)");
+    assert(get_diagonal_name(DiagonalType::Anti) == "Anti-Diagonal (/)");
+
+    std::cout << " PASSED\n";
+}
+
+void test_hyper_sudoku_windows() {
+    std::cout << "[TEST] HyperSudokuWindows (Windoku 4 interior window constraints)...";
+
+    // 1. Bitmasks, counts, and disjointness
+    const auto& all_windows = get_all_hyper_windows_bitset();
+    assert(all_windows.count() == 36);
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        const auto& win_mask = get_hyper_window_bitset(w);
+        assert(win_mask.count() == 9);
+        assert(win_mask.is_subset_of(all_windows));
+
+        // Each window must be mutually disjoint with all other windows
+        for (int other_w = 0; other_w < HYPER_WINDOWS; ++other_w) {
+            if (w != other_w) {
+                BitSet81 overlap = win_mask & get_hyper_window_bitset(other_w);
+                assert(overlap.empty());
+                assert(overlap.count() == 0);
+            }
+        }
+    }
+
+    // 2. Cell coordinates & window membership
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+
+        bool in_row_band = (r >= 1 && r <= 3) || (r >= 5 && r <= 7);
+        bool in_col_band = (c >= 1 && c <= 3) || (c >= 5 && c <= 7);
+        bool expected_window_cell = in_row_band && in_col_band;
+
+        int expected_win_idx = -1;
+        if (r >= 1 && r <= 3 && c >= 1 && c <= 3) expected_win_idx = 0;
+        else if (r >= 1 && r <= 3 && c >= 5 && c <= 7) expected_win_idx = 1;
+        else if (r >= 5 && r <= 7 && c >= 1 && c <= 3) expected_win_idx = 2;
+        else if (r >= 5 && r <= 7 && c >= 5 && c <= 7) expected_win_idx = 3;
+
+        assert(is_hyper_window_cell(cell) == expected_window_cell);
+        assert(get_hyper_window_index(cell) == expected_win_idx);
+
+        // Window-only peer bitsets
+        const auto& win_peers = get_hyper_window_peer_bitset(cell);
+        assert(!win_peers.test(cell));
+
+        if (!expected_window_cell) {
+            assert(win_peers.empty());
+            assert(get_hyper_peer_count(cell) == 20);
+            assert(get_hyper_peer_bitset(cell) == GRID.peer_bitsets[cell]);
+        } else {
+            assert(win_peers.count() == 8);
+            assert(win_peers.is_subset_of(get_hyper_window_bitset(expected_win_idx)));
+            assert(get_hyper_peer_count(cell) > 20);
+        }
+
+        // Full Hyper-Sudoku peers must contain standard peers & window peers
+        const auto& hyper_peers = get_hyper_peer_bitset(cell);
+        assert(GRID.peer_bitsets[cell].is_subset_of(hyper_peers));
+        assert(win_peers.is_subset_of(hyper_peers));
+        assert(!hyper_peers.test(cell));
+        assert(hyper_peers.count() == get_hyper_peer_count(cell));
+
+        // Hyper peer list consistency
+        const auto& peer_list = get_hyper_peer_cells(cell);
+        int count = get_hyper_peer_count(cell);
+        for (int i = 0; i < count; ++i) {
+            assert(hyper_peers.test(peer_list[i]));
+        }
+
+        // Combined X-Windoku peers
+        const auto& x_hyper_peers = get_x_hyper_peer_bitset(cell);
+        assert(hyper_peers.is_subset_of(x_hyper_peers));
+        assert(get_x_peer_bitset(cell).is_subset_of(x_hyper_peers));
+        assert(!x_hyper_peers.test(cell));
+        assert(x_hyper_peers.count() == get_x_hyper_peer_count(cell));
+    }
+
+    // 3. Peer symmetry: A in peers(B) <=> B in peers(A)
+    for (int a = 0; a < TOTAL_CELLS; ++a) {
+        for (int b = 0; b < TOTAL_CELLS; ++b) {
+            assert(get_hyper_peer_bitset(a).test(b) == get_hyper_peer_bitset(b).test(a));
+            assert(get_x_hyper_peer_bitset(a).test(b) == get_x_hyper_peer_bitset(b).test(a));
+        }
+    }
+
+    // 4. Window cell indexing and names
+    assert(get_hyper_window_bitset(HyperWindow::TopLeft) == get_hyper_window_bitset(0));
+    assert(get_hyper_window_bitset(HyperWindow::TopRight) == get_hyper_window_bitset(1));
+    assert(get_hyper_window_bitset(HyperWindow::BottomLeft) == get_hyper_window_bitset(2));
+    assert(get_hyper_window_bitset(HyperWindow::BottomRight) == get_hyper_window_bitset(3));
+
+    const auto& tl_cells = get_hyper_window_cells(HyperWindow::TopLeft);
+    assert(tl_cells[0] == cell_index(1, 1));
+    assert(tl_cells[4] == cell_index(2, 2));
+    assert(tl_cells[8] == cell_index(3, 3));
+
+    assert(!get_hyper_window_name(HyperWindow::TopLeft).empty());
+    assert(!get_hyper_window_name(0).empty());
+    assert(get_hyper_window_name(-1) == "Unknown Hyper Window");
+
+    std::cout << " PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -535,6 +862,8 @@ int main() {
 
     test_bitset81();
     test_grid_constants();
+    test_diagonal_bitboards();
+    test_hyper_sudoku_windows();
     test_board_state();
     test_dlx_solver();
     test_advanced_techniques();
