@@ -20,6 +20,7 @@
 #include "core/StepFinder.hpp"
 #include "core/Generator.hpp"
 #include "core/DiagonalBitboards.hpp"
+#include "core/HyperSudokuWindows.hpp"
 
 using namespace hodoku::core;
 
@@ -617,6 +618,108 @@ void test_diagonal_bitboards() {
     std::cout << " PASSED\n";
 }
 
+void test_hyper_sudoku_windows() {
+    std::cout << "[TEST] HyperSudokuWindows (Windoku 4 interior window constraints)...";
+
+    // 1. Bitmasks, counts, and disjointness
+    const auto& all_windows = get_all_hyper_windows_bitset();
+    assert(all_windows.count() == 36);
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        const auto& win_mask = get_hyper_window_bitset(w);
+        assert(win_mask.count() == 9);
+        assert(win_mask.is_subset_of(all_windows));
+
+        // Each window must be mutually disjoint with all other windows
+        for (int other_w = 0; other_w < HYPER_WINDOWS; ++other_w) {
+            if (w != other_w) {
+                BitSet81 overlap = win_mask & get_hyper_window_bitset(other_w);
+                assert(overlap.empty());
+                assert(overlap.count() == 0);
+            }
+        }
+    }
+
+    // 2. Cell coordinates & window membership
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+
+        bool in_row_band = (r >= 1 && r <= 3) || (r >= 5 && r <= 7);
+        bool in_col_band = (c >= 1 && c <= 3) || (c >= 5 && c <= 7);
+        bool expected_window_cell = in_row_band && in_col_band;
+
+        int expected_win_idx = -1;
+        if (r >= 1 && r <= 3 && c >= 1 && c <= 3) expected_win_idx = 0;
+        else if (r >= 1 && r <= 3 && c >= 5 && c <= 7) expected_win_idx = 1;
+        else if (r >= 5 && r <= 7 && c >= 1 && c <= 3) expected_win_idx = 2;
+        else if (r >= 5 && r <= 7 && c >= 5 && c <= 7) expected_win_idx = 3;
+
+        assert(is_hyper_window_cell(cell) == expected_window_cell);
+        assert(get_hyper_window_index(cell) == expected_win_idx);
+
+        // Window-only peer bitsets
+        const auto& win_peers = get_hyper_window_peer_bitset(cell);
+        assert(!win_peers.test(cell));
+
+        if (!expected_window_cell) {
+            assert(win_peers.empty());
+            assert(get_hyper_peer_count(cell) == 20);
+            assert(get_hyper_peer_bitset(cell) == GRID.peer_bitsets[cell]);
+        } else {
+            assert(win_peers.count() == 8);
+            assert(win_peers.is_subset_of(get_hyper_window_bitset(expected_win_idx)));
+            assert(get_hyper_peer_count(cell) > 20);
+        }
+
+        // Full Hyper-Sudoku peers must contain standard peers & window peers
+        const auto& hyper_peers = get_hyper_peer_bitset(cell);
+        assert(GRID.peer_bitsets[cell].is_subset_of(hyper_peers));
+        assert(win_peers.is_subset_of(hyper_peers));
+        assert(!hyper_peers.test(cell));
+        assert(hyper_peers.count() == get_hyper_peer_count(cell));
+
+        // Hyper peer list consistency
+        const auto& peer_list = get_hyper_peer_cells(cell);
+        int count = get_hyper_peer_count(cell);
+        for (int i = 0; i < count; ++i) {
+            assert(hyper_peers.test(peer_list[i]));
+        }
+
+        // Combined X-Windoku peers
+        const auto& x_hyper_peers = get_x_hyper_peer_bitset(cell);
+        assert(hyper_peers.is_subset_of(x_hyper_peers));
+        assert(get_x_peer_bitset(cell).is_subset_of(x_hyper_peers));
+        assert(!x_hyper_peers.test(cell));
+        assert(x_hyper_peers.count() == get_x_hyper_peer_count(cell));
+    }
+
+    // 3. Peer symmetry: A in peers(B) <=> B in peers(A)
+    for (int a = 0; a < TOTAL_CELLS; ++a) {
+        for (int b = 0; b < TOTAL_CELLS; ++b) {
+            assert(get_hyper_peer_bitset(a).test(b) == get_hyper_peer_bitset(b).test(a));
+            assert(get_x_hyper_peer_bitset(a).test(b) == get_x_hyper_peer_bitset(b).test(a));
+        }
+    }
+
+    // 4. Window cell indexing and names
+    assert(get_hyper_window_bitset(HyperWindow::TopLeft) == get_hyper_window_bitset(0));
+    assert(get_hyper_window_bitset(HyperWindow::TopRight) == get_hyper_window_bitset(1));
+    assert(get_hyper_window_bitset(HyperWindow::BottomLeft) == get_hyper_window_bitset(2));
+    assert(get_hyper_window_bitset(HyperWindow::BottomRight) == get_hyper_window_bitset(3));
+
+    const auto& tl_cells = get_hyper_window_cells(HyperWindow::TopLeft);
+    assert(tl_cells[0] == cell_index(1, 1));
+    assert(tl_cells[4] == cell_index(2, 2));
+    assert(tl_cells[8] == cell_index(3, 3));
+
+    assert(!get_hyper_window_name(HyperWindow::TopLeft).empty());
+    assert(!get_hyper_window_name(0).empty());
+    assert(get_hyper_window_name(-1) == "Unknown Hyper Window");
+
+    std::cout << " PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -627,6 +730,7 @@ int main() {
     test_bitset81();
     test_grid_constants();
     test_diagonal_bitboards();
+    test_hyper_sudoku_windows();
     test_board_state();
     test_dlx_solver();
     test_advanced_techniques();
