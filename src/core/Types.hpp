@@ -39,6 +39,39 @@ enum class CellStatus : uint8_t {
     UserSet = 3
 };
 
+enum class SudokuVariant : uint8_t {
+    Standard = 0,
+    Diagonal = 1 << 0,     // X-Sudoku (+18 columns: main and anti diagonals)
+    Hyper = 1 << 1,        // Windoku (+36 columns: 4 interior 3x3 windows)
+    DiagonalHyper = Diagonal | Hyper // X-Windoku (+54 columns)
+};
+
+[[nodiscard]] constexpr bool has_diagonal_constraint(SudokuVariant v) noexcept {
+    return (static_cast<uint8_t>(v) & static_cast<uint8_t>(SudokuVariant::Diagonal)) != 0;
+}
+
+[[nodiscard]] constexpr bool has_hyper_constraint(SudokuVariant v) noexcept {
+    return (static_cast<uint8_t>(v) & static_cast<uint8_t>(SudokuVariant::Hyper)) != 0;
+}
+
+[[nodiscard]] constexpr SudokuVariant operator|(SudokuVariant a, SudokuVariant b) noexcept {
+    return static_cast<SudokuVariant>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+[[nodiscard]] constexpr SudokuVariant operator&(SudokuVariant a, SudokuVariant b) noexcept {
+    return static_cast<SudokuVariant>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+
+[[nodiscard]] constexpr std::string_view variant_name(SudokuVariant v) noexcept {
+    switch (v) {
+        case SudokuVariant::Standard: return "Standard";
+        case SudokuVariant::Diagonal: return "Diagonal (X-Sudoku)";
+        case SudokuVariant::Hyper: return "Hyper-Sudoku (Windoku)";
+        case SudokuVariant::DiagonalHyper: return "Diagonal Hyper-Sudoku (X-Windoku)";
+    }
+    return "Unknown";
+}
+
 // Bitwise helper functions
 [[nodiscard]] constexpr CandidateMask digit_to_mask(int digit) noexcept {
     if (digit >= 1 && digit <= 9) {

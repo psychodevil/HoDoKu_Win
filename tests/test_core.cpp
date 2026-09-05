@@ -116,25 +116,125 @@ void test_board_state() {
 }
 
 void test_dlx_solver() {
-    std::cout << "[TEST] DlxSolver exact cover solver...";
+    std::cout << "[TEST] DlxSolver exact cover solver (Standard, Diagonal, Hyper, and X-Windoku)...";
 
+    // 1. Column counts across variants
+    DlxSolver solver_std(SudokuVariant::Standard);
+    assert(solver_std.active_columns() == 324);
+    assert(!solver_std.has_diagonal());
+    assert(!solver_std.has_hyper());
+
+    DlxSolver solver_diag(SudokuVariant::Diagonal);
+    assert(solver_diag.active_columns() == 342); // 324 + 18
+    assert(solver_diag.has_diagonal());
+    assert(!solver_diag.has_hyper());
+
+    DlxSolver solver_hyper(SudokuVariant::Hyper);
+    assert(solver_hyper.active_columns() == 360); // 324 + 36
+    assert(!solver_hyper.has_diagonal());
+    assert(solver_hyper.has_hyper());
+
+    DlxSolver solver_x_hyper(SudokuVariant::DiagonalHyper);
+    assert(solver_x_hyper.active_columns() == 378); // 324 + 18 + 36
+    assert(solver_x_hyper.has_diagonal());
+    assert(solver_x_hyper.has_hyper());
+
+    // 2. Standard puzzle benchmark
     std::string easy_puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079";
     BoardState board(easy_puzzle);
 
-    DlxSolver solver;
-    assert(solver.count_solutions(board, 2) == 1);
+    assert(solver_std.count_solutions(board, 2) == 1);
 
-    auto solution = solver.solve_one(board);
+    auto solution = solver_std.solve_one(board);
     assert(solution.has_value());
     assert(solution->is_solved());
     assert(solution->is_valid());
 
     std::string escargot = "100007090030020008009600500005300900010080002600004000300000010040000007007000300";
     BoardState escargot_board(escargot);
-    auto escargot_sol = solver.solve_one(escargot_board);
+    auto escargot_sol = solver_std.solve_one(escargot_board);
     assert(escargot_sol.has_value());
     assert(escargot_sol->is_solved());
     assert(escargot_sol->is_valid());
+
+    // 3. Diagonal Sudoku (X-Sudoku) solving from empty grid
+    BoardState empty_board;
+    auto diag_sol = solver_diag.solve_one(empty_board);
+    assert(diag_sol.has_value());
+    assert(diag_sol->is_solved());
+    assert(diag_sol->is_valid());
+
+    CandidateMask main_diag_digits = 0;
+    CandidateMask anti_diag_digits = 0;
+    for (int i = 0; i < 9; ++i) {
+        main_diag_digits |= digit_to_mask(diag_sol->get_value(cell_index(i, i)));
+        anti_diag_digits |= digit_to_mask(diag_sol->get_value(cell_index(i, 8 - i)));
+    }
+    assert(main_diag_digits == ALL_CANDIDATES_MASK);
+    assert(anti_diag_digits == ALL_CANDIDATES_MASK);
+
+    // 4. Hyper-Sudoku (Windoku) solving from empty grid
+    auto hyper_sol = solver_hyper.solve_one(empty_board);
+    assert(hyper_sol.has_value());
+    assert(hyper_sol->is_solved());
+    assert(hyper_sol->is_valid());
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_digits = 0;
+        for (int cell : get_hyper_window_cells(w)) {
+            win_digits |= digit_to_mask(hyper_sol->get_value(cell));
+        }
+        assert(win_digits == ALL_CANDIDATES_MASK);
+    }
+
+    // 5. Combined Diagonal Hyper-Sudoku (X-Windoku) solving
+    auto x_hyper_sol = solver_x_hyper.solve_one(empty_board);
+    assert(x_hyper_sol.has_value());
+    assert(x_hyper_sol->is_solved());
+    assert(x_hyper_sol->is_valid());
+
+    CandidateMask xh_main = 0, xh_anti = 0;
+    for (int i = 0; i < 9; ++i) {
+        xh_main |= digit_to_mask(x_hyper_sol->get_value(cell_index(i, i)));
+        xh_anti |= digit_to_mask(x_hyper_sol->get_value(cell_index(i, 8 - i)));
+    }
+    assert(xh_main == ALL_CANDIDATES_MASK);
+    assert(xh_anti == ALL_CANDIDATES_MASK);
+
+    for (int w = 0; w < HYPER_WINDOWS; ++w) {
+        CandidateMask win_digits = 0;
+        for (int cell : get_hyper_window_cells(w)) {
+            win_digits |= digit_to_mask(x_hyper_sol->get_value(cell));
+        }
+        assert(win_digits == ALL_CANDIDATES_MASK);
+    }
+
+    // 6. Constraint enforcement & contradiction tests
+    // Place two identical digits in cells that are not row/col/box peers, but ARE diagonal peers:
+    // Cell (0,0) [row 0, col 0, box 0] and Cell (8,8) [row 8, col 8, box 8]
+    BoardState diag_conflict;
+    diag_conflict.set_value(cell_index(0, 0), 9);
+    diag_conflict.set_value(cell_index(8, 8), 9);
+
+    // Standard solver: valid, can find solutions
+    assert(solver_std.count_solutions(diag_conflict, 1) > 0);
+    // Diagonal solver: contradictory, must find 0 solutions!
+    assert(solver_diag.count_solutions(diag_conflict, 1) == 0);
+
+    // Place two identical digits in cells that are not row/col/box peers, but ARE in the same Hyper window:
+    // In TopLeft window (r1-3, c1-3): Cell (1,1) [row 1, col 1, box 0] and Cell (3,3) [row 3, col 3, box 4]
+    BoardState hyper_conflict;
+    hyper_conflict.set_value(cell_index(1, 1), 7);
+    hyper_conflict.set_value(cell_index(3, 3), 7);
+
+    // Standard solver: valid, can find solutions
+    assert(solver_std.count_solutions(hyper_conflict, 1) > 0);
+    // Hyper solver: contradictory, must find 0 solutions!
+    assert(solver_hyper.count_solutions(hyper_conflict, 1) == 0);
+
+    // 7. Dynamic variant switching via parameter override
+    assert(solver_std.count_solutions(diag_conflict, 1, SudokuVariant::Diagonal) == 0);
+    assert(solver_std.count_solutions(hyper_conflict, 1, SudokuVariant::Hyper) == 0);
 
     std::cout << " PASSED\n";
 }
