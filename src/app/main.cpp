@@ -81,55 +81,98 @@ void DoCheckProgress(HWND hwnd, HoDoKuStudio& studio) {
     }
 }
 
-// Global Keystroke Processing (Pre-Filter for 100% Reliable Shortcuts)
+// Global Keystroke Processing (100% Exact Replica of HoDoKu v2.2 Specification)
 bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     (void)lParam;
     if (!g_studio) return false;
     if (msg != WM_KEYDOWN && msg != WM_SYSKEYDOWN) return false;
 
+    // Isolate modal dialogs so keystrokes (like typing into edit controls) do not leak to the board
+    HWND hActive = GetActiveWindow();
+    if (hActive && hActive != g_hwnd) {
+        return false;
+    }
+
     bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     bool isAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-    // 1. Function Keys (F2..F4 Game Modes, F5..F8 Tabs, F11 Singles, F12 Hints)
-    if (wParam == VK_F2) {
-        g_studio->set_game_mode(GameMode::Playing);
-        UpdateStatusBarText(*g_studio);
-        UpdateHintBoxText(*g_studio);
+    // 0. Escape: In main window, ends coloring mode or clears active hint step
+    if (wParam == VK_ESCAPE) {
+        if (g_studio->get_active_color_index() != -1) {
+            g_studio->set_active_color_index(-1);
+            for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (g_studio->get_selected_step().has_value()) {
+            g_studio->cancel_hint();
+            UpdateHintBoxText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        return false;
+    }
+
+    // Alt+X: Quit program (HoDoKu official shortcut)
+    if (isAlt && (wParam == 'X' || wParam == 'x')) {
+        PostMessageW(g_hwnd, WM_CLOSE, 0, 0);
+        return true;
+    }
+
+    // 1. Digit Filters: [F1] ... [F9], [Shift][F1] ... [Shift][F9], [Ctrl][F1] ... [Ctrl][F9]
+    if (wParam >= VK_F1 && wParam <= VK_F9) {
+        int d = static_cast<int>(wParam - VK_F1 + 1);
+        if (isCtrl) {
+            // [ctrl][F1] ... [ctrl][F9]: Adds/removes candidate to/from multi-filter set
+            g_studio->toggle_multi_filter_digit(d);
+        } else {
+            if (isShift) {
+                // [shift][F1] ... [shift][F9]: Inverts allowed/forbidden mode and toggles digit
+                g_studio->toggle_filter_mode();
+            }
+            g_studio->toggle_filter_digit(d);
+        }
+        for (HWND btn : g_toolbarButtons) if (btn) InvalidateRect(btn, NULL, TRUE);
         InvalidateRect(g_hwnd, NULL, FALSE);
         return true;
     }
-    if (wParam == VK_F3) {
-        g_studio->set_game_mode(GameMode::Learning);
-        UpdateStatusBarText(*g_studio);
-        UpdateHintBoxText(*g_studio);
-        InvalidateRect(g_hwnd, NULL, FALSE);
-        return true;
+
+    // 2. Filter Navigation: [>] / [.], [<] / [,]
+    if (!isCtrl && !isAlt) {
+        if (wParam == VK_OEM_COMMA || wParam == VK_OEM_PERIOD) {
+            bool forward = (wParam == VK_OEM_PERIOD);
+            g_studio->cycle_filter_digit(forward);
+            for (HWND btn : g_toolbarButtons) if (btn) InvalidateRect(btn, NULL, TRUE);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
-    if (wParam == VK_F4) {
-        g_studio->set_game_mode(GameMode::Practicing);
-        UpdateStatusBarText(*g_studio);
-        UpdateHintBoxText(*g_studio);
-        ShowPracticingDialog(g_hwnd, *g_studio);
-        InvalidateRect(g_hwnd, NULL, FALSE);
-        return true;
+
+    // 3. Filter Cell Actions: [Space] to toggle candidate, [Enter] to set single or candidate
+    if (wParam == VK_SPACE && !isCtrl && !isAlt) {
+        if (g_studio->is_filter_active()) {
+            g_studio->toggle_filter_candidate_at_selected();
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
-    if (wParam == VK_F5) {
-        SwitchTab(TabView::ActiveCell, *g_studio);
-        return true;
+    if (wParam == VK_RETURN && !isCtrl && !isAlt) {
+        if (g_studio->set_single_or_filtered_at_selected()) {
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
-    if (wParam == VK_F6) {
-        SwitchTab(TabView::Summary, *g_studio);
-        return true;
-    }
-    if (wParam == VK_F7) {
-        SwitchTab(TabView::SolutionPath, *g_studio);
-        return true;
-    }
-    if (wParam == VK_F8) {
-        SwitchTab(TabView::AllSteps, *g_studio);
-        return true;
-    }
+
+    // 4. Hints & Solver Function Keys: F11 (Singles), F12 (Next Step), Alt+F12 (Vague), Ctrl+F12 (Concrete)
     if (wParam == VK_F11) {
         g_studio->set_all_singles();
         if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
@@ -152,25 +195,30 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         return true;
     }
 
+    // 5. Views & Tabs Switching (Ctrl+Shift+S, U, O, A, Z, P, C, 1..5)
     if (isCtrl && isShift) {
-        if (wParam == '0') {
+        if (wParam == 'S') {
             ToggleSudokuOnly(*g_studio);
             return true;
         }
-        if (wParam == '1') {
-            SwitchTab(TabView::ActiveCell, *g_studio);
-            return true;
-        }
-        if (wParam == '2') {
+        if (wParam == 'U') {
             SwitchTab(TabView::Summary, *g_studio);
             return true;
         }
-        if (wParam == '3') {
+        if (wParam == 'O') {
             SwitchTab(TabView::SolutionPath, *g_studio);
             return true;
         }
-        if (wParam == '4') {
+        if (wParam == 'A') {
             SwitchTab(TabView::AllSteps, *g_studio);
+            return true;
+        }
+        if (wParam == 'Z') {
+            SwitchTab(TabView::ActiveCell, *g_studio);
+            return true;
+        }
+        if (wParam == 'P') {
+            ShowPreferencesDialog(g_hwnd, *g_studio);
             return true;
         }
         if (wParam == 'C') {
@@ -178,10 +226,85 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
         }
+        if (wParam >= '1' && wParam <= '5') {
+            int lvl = static_cast<int>(wParam - '1');
+            SendMessageW(g_hLevelCombo, CB_SETCURSEL, lvl, 0);
+            g_studio->new_puzzle(lvl);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
 
-    // 2. Control Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+N, Ctrl+C, Ctrl+V, Ctrl+G, Ctrl+R, Ctrl+E, Ctrl+H, Ctrl+O, Ctrl+S, Ctrl+P)
-    if (isCtrl && !isAlt) {
+    // 6. Navigation & Range Selection (Arrows, Ctrl+Shift+Arrows, Ctrl+Arrows, Shift+Arrows, Home/End)
+    if (wParam == VK_LEFT || wParam == VK_RIGHT || wParam == VK_UP || wParam == VK_DOWN) {
+        int dr = (wParam == VK_DOWN) ? 1 : (wParam == VK_UP) ? -1 : 0;
+        int dc = (wParam == VK_RIGHT) ? 1 : (wParam == VK_LEFT) ? -1 : 0;
+
+        if (isCtrl && isShift) {
+            // [shift][ctrl][arrows]: Next cell containing filtered candidate
+            if (g_studio->is_filter_active()) {
+                g_studio->jump_next_filtered_cell(dr, dc);
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(g_hwnd, NULL, FALSE);
+                return true;
+            }
+        }
+        if (isCtrl && !isShift && !isAlt) {
+            // [ctrl][arrows]: Move cursor to next unsolved cell
+            g_studio->jump_next_unsolved_cell();
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (isShift && !isCtrl && !isAlt) {
+            // [shift][arrows]: Expand selection region
+            g_studio->extend_selection_region(dr, dc);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (!isCtrl && !isShift && !isAlt) {
+            // Plain arrows: Move cursor
+            g_studio->move_selection(dr, dc);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+    }
+
+    if (wParam == VK_HOME) {
+        if (isCtrl) {
+            g_studio->move_to_home(true); // topmost row
+        } else {
+            g_studio->move_to_home(false); // leftmost column
+        }
+        if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+        UpdateStatusBarText(*g_studio);
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return true;
+    }
+    if (wParam == VK_END) {
+        if (isCtrl) {
+            g_studio->move_to_end(true); // bottommost row
+        } else {
+            g_studio->move_to_end(false); // rightmost column
+        }
+        if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+        UpdateStatusBarText(*g_studio);
+        InvalidateRect(g_hwnd, NULL, FALSE);
+        return true;
+    }
+
+    // 7. Control Shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+P, Ctrl+R, Ctrl+C, Ctrl+G, Ctrl+V, Ctrl+E, Ctrl+B, Ctrl+M, Ctrl+T)
+    if (isCtrl && !isAlt && !isShift) {
         if (wParam == 'Z') {
             g_studio->undo();
             if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
@@ -210,6 +333,18 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
         }
+        if (wParam == 'O') {
+            DoFileOpen(g_hwnd, *g_studio);
+            return true;
+        }
+        if (wParam == 'S') {
+            DoFileSave(g_hwnd, *g_studio);
+            return true;
+        }
+        if (wParam == 'P') {
+            DoPrintPuzzle(g_hwnd, *g_studio);
+            return true;
+        }
         if (wParam == 'R') {
             g_studio->reset_puzzle();
             if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
@@ -219,58 +354,18 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
         }
-        if (wParam == 'E') {
-            g_studio->execute_hint();
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            else PopulateListView(*g_studio);
-            UpdateHintBoxText(*g_studio);
-            UpdateStatusBarText(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == 'H') {
-            if (isShift) {
-                g_studio->give_concrete_hint();
-            } else {
-                g_studio->give_vague_hint();
-            }
-            UpdateHintBoxText(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == 'O') {
-            DoFileOpen(g_hwnd, *g_studio);
-            return true;
-        }
-        if (wParam == 'S') {
-            if (isShift) {
-                DoFileSaveAs(g_hwnd, *g_studio);
-            } else {
-                DoFileSave(g_hwnd, *g_studio);
-            }
-            return true;
-        }
-        if (wParam == 'P') {
-            DoPrintPuzzle(g_hwnd, *g_studio);
-            return true;
-        }
-        if (wParam == 'B') {
-            ShowBackdoorsDialog(g_hwnd, *g_studio);
-            return true;
-        }
-        if (wParam == 'M') {
-            ShowSavepointsDialog(g_hwnd, *g_studio);
-            return true;
-        }
         if (wParam == 'C') {
+            // [ctrl][c]: Copy candidates (PM grid) to clipboard
             SetClipboardText(g_hwnd, g_studio->export_pm_grid());
             return true;
         }
         if (wParam == 'G') {
-            ShowSetGivensDialog(g_hwnd, *g_studio);
+            // [ctrl][g]: Copy givens to clipboard
+            SetClipboardText(g_hwnd, g_studio->export_givens_string());
             return true;
         }
         if (wParam == 'V') {
+            // [ctrl][v]: Paste sudoku from clipboard
             std::string clip = GetClipboardText(g_hwnd);
             if (!clip.empty()) {
                 g_studio->import_from_string(clip);
@@ -282,12 +377,29 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return true;
         }
+        if (wParam == 'E') {
+            g_studio->execute_hint();
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            else PopulateListView(*g_studio);
+            UpdateHintBoxText(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (wParam == 'B') {
+            ShowBackdoorsDialog(g_hwnd, *g_studio);
+            return true;
+        }
+        if (wParam == 'M') {
+            ShowSavepointsDialog(g_hwnd, *g_studio);
+            return true;
+        }
         if (wParam == 'T') {
             DoCheckProgress(g_hwnd, *g_studio);
             return true;
         }
 
-        // Ctrl + 1..9: Toggle candidate in focused cell
+        // [Ctrl][1] ... [Ctrl][9]: Toggle candidate in highlighted cell
         if (wParam >= '1' && wParam <= '9') {
             int d = static_cast<int>(wParam - '0');
             g_studio->toggle_candidate_at_selected(d);
@@ -298,86 +410,9 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
         }
-
-        // Ctrl + Arrows: Jump to next unsolved cell
-        if (wParam == VK_LEFT || wParam == VK_RIGHT || wParam == VK_UP || wParam == VK_DOWN) {
-            g_studio->jump_next_unsolved_cell();
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_HOME) {
-            g_studio->move_to_home(true);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_END) {
-            g_studio->move_to_end(true);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
     }
 
-    // 3. Arrow Keys Navigation & Range Selection
-    if (!isCtrl && !isAlt) {
-        if (isShift) {
-            // Shift + Arrow: Expand selection region (SudokuPanel.java lines 1187, 1222, 1257, 1292)
-            if (wParam == VK_UP || wParam == VK_DOWN || wParam == VK_LEFT || wParam == VK_RIGHT) {
-                int dr = (wParam == VK_DOWN) ? 1 : (wParam == VK_UP) ? -1 : 0;
-                int dc = (wParam == VK_RIGHT) ? 1 : (wParam == VK_LEFT) ? -1 : 0;
-                g_studio->extend_selection_region(dr, dc);
-                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-                UpdateStatusBarText(*g_studio);
-                InvalidateRect(g_hwnd, NULL, FALSE);
-                return true;
-            }
-        } else {
-            if (wParam == VK_UP) {
-                g_studio->move_selection(-1, 0);
-                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-                UpdateStatusBarText(*g_studio);
-                InvalidateRect(g_hwnd, NULL, FALSE);
-                return true;
-            }
-            if (wParam == VK_DOWN) {
-                g_studio->move_selection(1, 0);
-                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-                UpdateStatusBarText(*g_studio);
-                InvalidateRect(g_hwnd, NULL, FALSE);
-                return true;
-            }
-            if (wParam == VK_LEFT) {
-                g_studio->move_selection(0, -1);
-                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-                UpdateStatusBarText(*g_studio);
-                InvalidateRect(g_hwnd, NULL, FALSE);
-                return true;
-            }
-            if (wParam == VK_RIGHT) {
-                g_studio->move_selection(0, 1);
-                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-                UpdateStatusBarText(*g_studio);
-                InvalidateRect(g_hwnd, NULL, FALSE);
-                return true;
-            }
-        }
-        if (wParam == VK_HOME) {
-            g_studio->move_to_home(false);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-        if (wParam == VK_END) {
-            g_studio->move_to_end(false);
-            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-            InvalidateRect(g_hwnd, NULL, FALSE);
-            return true;
-        }
-    }
-
-    // 4. Digits 1..9 or Numpad 1..9: Set Cell Value
+    // 8. Digits 1..9 or Numpad 1..9: Set Cell Value
     if (!isCtrl && !isAlt && ((wParam >= '1' && wParam <= '9') || (wParam >= VK_NUMPAD1 && wParam <= VK_NUMPAD9))) {
         int d = (wParam >= '1' && wParam <= '9') ? static_cast<int>(wParam - '0') : static_cast<int>(wParam - VK_NUMPAD1 + 1);
         if (TrySetDigitAtSelectedWithTutor(g_hwnd, *g_studio, d)) {
@@ -390,8 +425,8 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         return true;
     }
 
-    // 5. Digit Deletion: Backspace, Delete, '0'
-    if (wParam == VK_BACK || wParam == VK_DELETE || wParam == '0' || wParam == VK_NUMPAD0) {
+    // 9. Digit Deletion: Backspace, Delete, '0'
+    if (!isCtrl && !isAlt && (wParam == VK_BACK || wParam == VK_DELETE || wParam == '0' || wParam == VK_NUMPAD0)) {
         g_studio->set_digit_at_selected(0);
         if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
         else PopulateListView(*g_studio);
@@ -401,7 +436,7 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         return true;
     }
 
-    // 6. Cell Coloring by Keystroke: A..E (primary colors) and Shift+A..Shift+E (secondary tints) or 'R' to clear
+    // 10. Cell Coloring by Keystroke: A..E (primary colors) and Shift+A..Shift+E (secondary tints), R to clear
     if (!isCtrl && !isAlt) {
         if (wParam >= 'A' && wParam <= 'E') {
             int baseCol = static_cast<int>(wParam - 'A') * 2;
@@ -1210,6 +1245,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
+        HWND hActive = GetActiveWindow();
+        if (hActive && hActive != hwnd) {
+            HWND hTop = GetAncestor(hActive, GA_ROOT);
+            if (hTop && hTop != hwnd) {
+                // If Escape is pressed while a modal dialog is active, send IDCANCEL to close it
+                if (msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE) {
+                    SendMessage(hTop, WM_COMMAND, MAKEWPARAM(IDCANCEL, 0), 0);
+                    continue;
+                }
+                if (IsDialogMessageW(hTop, &msg)) {
+                    continue;
+                }
+            }
+        }
         if (!ProcessGlobalKeyShortcuts(msg.message, msg.wParam, msg.lParam)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);

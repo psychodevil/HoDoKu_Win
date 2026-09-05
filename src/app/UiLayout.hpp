@@ -709,20 +709,20 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hFile, MF_STRING, IDM_FILE_NEW, L"&New Random Sudoku\tCtrl+N");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_OPEN, L"&Open...\tCtrl+O");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE, L"&Save\tCtrl+S");
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE_AS, L"Save &As...\tCtrl+Shift+S");
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_EXPORT_PNG, L"&Export Board Image (PNG)...");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE_AS, L"Save &As...\tShift+S");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_PRINT, L"&Print Puzzle...\tCtrl+P");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_EXPORT_PNG, L"&Export Board Image (PNG)...");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_SET_GIVENS, L"&Set Givens...\tCtrl+G");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_SET_GIVENS, L"&Set Givens...");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_COPY_GIVENS, L"Copy &Givens");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_COPY_GIVENS, L"Copy &Givens\tCtrl+G");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_COPY_PM, L"&Copy Candidates (PM)\tCtrl+C");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_PASTE, L"&Paste Sudoku\tCtrl+V");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hFile, MF_STRING, IDM_FILE_RESET, L"&Restart Game\tCtrl+R");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_CLEAR, L"&Clear Grid");
     AppendMenuW(hFile, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hFile, MF_STRING, IDM_FILE_EXIT, L"E&xit\tAlt+F4");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_EXIT, L"E&xit\tAlt+X");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hFile, L"&File");
 
     // Edit Menu
@@ -730,17 +730,19 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_UNDO, L"&Undo\tCtrl+Z");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_REDO, L"&Redo\tCtrl+Y");
     AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_ADD_SAVEPOINT, L"Add &Bookmark / Savepoint\tCtrl+M");
+    AppendMenuW(hEdit, MF_STRING, IDM_EDIT_ADD_SAVEPOINT, L"Add &Bookmark / Savepoint");
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_RESTORE_SAVEPOINT, L"Manage &Bookmarks...");
     AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hEdit, MF_STRING, IDM_EDIT_CLEAR_COLORS, L"Clear All &Colors\tR");
+    AppendMenuW(hEdit, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hEdit, MF_STRING, IDM_OPTIONS_PREFERENCES, L"&Preferences...\tCtrl+Shift+P");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hEdit, L"&Edit");
 
     // Mode Menu
     HMENU hMode = CreatePopupMenu();
-    AppendMenuW(hMode, MF_STRING, IDM_MODE_PLAYING, L"&Playing Mode\tF2");
-    AppendMenuW(hMode, MF_STRING, IDM_MODE_LEARNING, L"&Learning Mode (Tutor)\tF3");
-    AppendMenuW(hMode, MF_STRING, IDM_MODE_PRACTICING, L"Prac&ticing Mode\tF4");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_PLAYING, L"&Playing Mode");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_LEARNING, L"&Learning Mode (Tutor)");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_PRACTICING, L"Prac&ticing Mode");
     AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CHECK_PROGRESS, L"&Check Progress (Tutor)\tCtrl+T");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CONFIG_TRAINING, L"&Configure Training Techniques...");
@@ -748,32 +750,40 @@ inline HMENU CreateHoDoKuMenuBar() {
 
     // Options Menu
     HMENU hOptions = CreatePopupMenu();
-    AppendMenuW(hOptions, MF_STRING, IDM_OPTIONS_PREFERENCES, L"&Preferences...\tCtrl+P");
+    HMENU hLevels = CreatePopupMenu();
+    AppendMenuW(hLevels, MF_STRING, 9301, L"&1 Easy\tCtrl+Shift+1");
+    AppendMenuW(hLevels, MF_STRING, 9302, L"&2 Medium\tCtrl+Shift+2");
+    AppendMenuW(hLevels, MF_STRING, 9303, L"&3 Hard\tCtrl+Shift+3");
+    AppendMenuW(hLevels, MF_STRING, 9304, L"&4 Unfair\tCtrl+Shift+4");
+    AppendMenuW(hLevels, MF_STRING, 9305, L"&5 Extreme\tCtrl+Shift+5");
+    AppendMenuW(hOptions, MF_POPUP, (UINT_PTR)hLevels, L"Difficulty &Level");
+    AppendMenuW(hOptions, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hOptions, MF_STRING, IDM_OPTIONS_PREFERENCES, L"&Preferences...\tCtrl+Shift+P");
     AppendMenuW(hOptions, MF_STRING, 9202, L"&Color Configuration...");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hOptions, L"&Options");
 
     // Puzzle Menu
     HMENU hPuzzle = CreatePopupMenu();
-    AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_VAGUE, L"&Vague Hint\tAlt+F12");
-    AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_CONCRETE, L"&Concrete Hint\tCtrl+F12");
     AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_NEXT, L"&Show Next Step\tF12");
+    AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_CONCRETE, L"&Concrete Hint\tCtrl+F12");
+    AppendMenuW(hPuzzle, MF_STRING, IDC_BTN_HINT_VAGUE, L"&Vague Hint\tAlt+F12");
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_EXECUTE_HINT, L"&Execute Step\tCtrl+E");
     AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hPuzzle, MF_STRING, IDM_SOLVER_FIND_BACKDOORS, L"Find &Backdoors...\tCtrl+B");
-    AppendMenuW(hPuzzle, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SET_SINGLES, L"Set All &Singles\tF11");
-    AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SOLVE_DLX, L"&Solve DLX\tCtrl+Shift+S");
+    AppendMenuW(hPuzzle, MF_STRING, IDM_SOLVER_FIND_BACKDOORS, L"Find &Backdoors...");
+    AppendMenuW(hPuzzle, MF_STRING, IDM_PUZZLE_SOLVE_DLX, L"&Solve DLX");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hPuzzle, L"&Puzzle");
 
     // View Menu
     HMENU hView = CreatePopupMenu();
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_SUDOKU_ONLY, L"&Sudoku Only\tCtrl+Shift+0");
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_COLORKU, L"&ColorKu 3D Marble Mode\tCtrl+Shift+C");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_SUDOKU_ONLY, L"&Sudoku Only\tCtrl+Shift+S");
     AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_SUMMARY, L"&Summary\tF6");
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_SOL_PATH, L"Solution &Path\tF7");
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_ALL_STEPS, L"&All Possible Steps\tF8");
-    AppendMenuW(hView, MF_STRING, IDM_VIEW_ACTIVE_CELL, L"&Active Cell\tF5");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_SUMMARY, L"&Summary\tCtrl+Shift+U");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_SOL_PATH, L"Solution &Path\tCtrl+Shift+O");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_ALL_STEPS, L"&All Possible Steps\tCtrl+Shift+A");
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_ACTIVE_CELL, L"&Active Cell\tCtrl+Shift+Z");
+    AppendMenuW(hView, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hView, MF_STRING, IDM_VIEW_COLORKU, L"&ColorKu 3D Marble Mode\tCtrl+Shift+C");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hView, L"&View");
 
     // Help Menu

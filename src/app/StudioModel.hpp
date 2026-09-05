@@ -6,11 +6,37 @@
 #include <queue>
 #include <atomic>
 #include <map>
+#include <bit>
 #include "AppTypes.hpp"
 #include "../core/StepFinder.hpp"
 #include "../core/SimpleTechniques.hpp"
 
 namespace hodoku::ui {
+
+inline int filter_popcount(uint16_t mask) noexcept {
+#if defined(__cpp_lib_bitops) && __cpp_lib_bitops >= 201907L
+    return std::popcount(mask);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_popcount(mask);
+#else
+    int c = 0;
+    while (mask) { mask &= (mask - 1); ++c; }
+    return c;
+#endif
+}
+
+inline int filter_countr_zero(uint16_t mask) noexcept {
+#if defined(__cpp_lib_bitops) && __cpp_lib_bitops >= 201907L
+    return std::countr_zero(mask);
+#elif defined(__GNUC__) || defined(__clang__)
+    return mask == 0 ? 16 : __builtin_ctz(mask);
+#else
+    if (mask == 0) return 16;
+    int c = 0;
+    while ((mask & 1) == 0) { mask >>= 1; ++c; }
+    return c;
+#endif
+}
 
 class HoDoKuStudio {
 public:
@@ -83,6 +109,7 @@ public:
                 m_selectedStep.reset();
                 m_hintLevel = HintLevel::None;
                 m_activeFilterDigit = 0;
+                m_filterMask = 0;
                 m_filterBivalue = false;
                 recalculate_solution_path();
                 recalculate_fas();
@@ -268,22 +295,186 @@ public:
     void set_active_candidate_color(int c) { m_activeCandidateColor = c; }
 
     void toggle_filter_digit(int digit) {
-        if (m_activeFilterDigit == digit) {
+        if (digit < 1 || digit > 9) return;
+        if (m_filterMask == (1u << digit)) {
+            m_filterMask = 0;
             m_activeFilterDigit = 0;
         } else {
+            m_filterMask = (1u << digit);
             m_activeFilterDigit = digit;
             m_filterBivalue = false;
         }
     }
 
+    void toggle_multi_filter_digit(int digit) {
+        if (digit < 1 || digit > 9) return;
+        m_filterMask ^= (1u << digit);
+        m_filterBivalue = false;
+        if (filter_popcount(m_filterMask) == 1) {
+            m_activeFilterDigit = filter_countr_zero(m_filterMask);
+        } else {
+            m_activeFilterDigit = 0;
+        }
+    }
+
     void toggle_bivalue_filter() {
         m_filterBivalue = !m_filterBivalue;
-        if (m_filterBivalue) m_activeFilterDigit = 0;
+        if (m_filterBivalue) {
+            m_activeFilterDigit = 0;
+            m_filterMask = 0;
+        }
     }
 
     void clear_filters() {
         m_activeFilterDigit = 0;
+        m_filterMask = 0;
         m_filterBivalue = false;
+    }
+
+    bool is_filter_active() const {
+        return (m_filterMask != 0) || m_filterBivalue;
+    }
+
+    uint16_t get_filter_mask() const {
+        return m_filterMask;
+    }
+
+    int get_single_filter_digit() const {
+        if (filter_popcount(m_filterMask) == 1) {
+            return filter_countr_zero(m_filterMask);
+        }
+        return m_activeFilterDigit;
+    }
+
+    void cycle_filter_digit(bool forward) {
+        uint16_t presentMask = 0;
+        for (int d = 1; d <= 9; ++d) {
+            if (m_board.get_cells_with_candidate(d).any()) {
+                presentMask |= (1u << d);
+            }
+        }
+        if (presentMask == 0) return;
+
+        int cur = get_single_filter_digit();
+        if (cur <= 0) cur = forward ? 9 : 1;
+
+        int next = cur;
+        for (int step = 0; step < 9; ++step) {
+            if (forward) {
+                next++;
+                if (next > 9) next = 1;
+            } else {
+                next--;
+                if (next < 1) next = 9;
+            }
+            if (presentMask & (1u << next)) {
+                toggle_filter_digit(next);
+                return;
+            }
+        }
+    }
+
+    void jump_next_filtered_cell(int dr, int dc) {
+        int cand = get_single_filter_digit();
+        if (cand <= 0 || m_selectedCell < 0) return;
+
+        int curR = cell_row(m_selectedCell);
+        int curC = cell_col(m_selectedCell);
+
+        if (dr > 0) { // Down
+            for (int step = 1; step < 81; ++step) {
+                int r = (curR + step) % 9;
+                int c = (curC + (curR + step) / 9) % 9;
+                int idx = cell_index(r, c);
+                if (m_board.is_unfilled(idx) && m_board.has_candidate(idx, cand)) {
+                    m_selectedCell = idx;
+                    clear_multi_selection();
+                    return;
+                }
+            }
+        } else if (dr < 0) { // Up
+            for (int step = 1; step < 81; ++step) {
+                int r = (curR - step % 9 + 9) % 9;
+                int c = (curC - (step / 9) + 9) % 9;
+                int idx = cell_index(r, c);
+                if (m_board.is_unfilled(idx) && m_board.has_candidate(idx, cand)) {
+                    m_selectedCell = idx;
+                    clear_multi_selection();
+                    return;
+                }
+            }
+        } else if (dc > 0) { // Right
+            for (int i = m_selectedCell + 1; i < 81; ++i) {
+                if (m_board.is_unfilled(i) && m_board.has_candidate(i, cand)) {
+                    m_selectedCell = i;
+                    clear_multi_selection();
+                    return;
+                }
+            }
+        } else if (dc < 0) { // Left
+            for (int i = m_selectedCell - 1; i >= 0; --i) {
+                if (m_board.is_unfilled(i) && m_board.has_candidate(i, cand)) {
+                    m_selectedCell = i;
+                    clear_multi_selection();
+                    return;
+                }
+            }
+        }
+    }
+
+    void toggle_filter_candidate_at_selected() {
+        int cand = get_single_filter_digit();
+        if (cand > 0) {
+            toggle_candidate_at_selected(cand);
+        }
+    }
+
+    bool is_hidden_single_in_house(int cell, int digit) const {
+        if (!m_board.is_unfilled(cell) || !m_board.has_candidate(cell, digit)) return false;
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+        int b = cell_box(cell);
+
+        int countR = 0;
+        for (int cellIdx : GRID.row_cells[r]) {
+            if (m_board.is_unfilled(cellIdx) && m_board.has_candidate(cellIdx, digit)) countR++;
+        }
+        if (countR == 1) return true;
+
+        int countC = 0;
+        for (int cellIdx : GRID.col_cells[c]) {
+            if (m_board.is_unfilled(cellIdx) && m_board.has_candidate(cellIdx, digit)) countC++;
+        }
+        if (countC == 1) return true;
+
+        int countB = 0;
+        for (int cellIdx : GRID.box_cells[b]) {
+            if (m_board.is_unfilled(cellIdx) && m_board.has_candidate(cellIdx, digit)) countB++;
+        }
+        return (countB == 1);
+    }
+
+    bool set_single_or_filtered_at_selected() {
+        if (m_selectedCell < 0 || m_selectedCell >= TOTAL_CELLS) return false;
+        if (!m_board.is_unfilled(m_selectedCell)) return false;
+
+        int numCand = m_board.count_candidates(m_selectedCell);
+        if (numCand == 1) {
+            for (int d = 1; d <= 9; ++d) {
+                if (m_board.has_candidate(m_selectedCell, d)) {
+                    set_digit_at_selected(d);
+                    return true;
+                }
+            }
+        }
+
+        int cand = get_single_filter_digit();
+        if (cand > 0 && m_board.has_candidate(m_selectedCell, cand)) {
+            set_digit_at_selected(cand);
+            return true;
+        }
+
+        return false;
     }
 
     bool is_filter_excluded_mode() const { return m_filterExcluded; }
@@ -819,6 +1010,7 @@ private:
     std::optional<Step> m_hoveredStep;
 
     int m_activeFilterDigit{0};
+    uint16_t m_filterMask{0};
     bool m_filterBivalue{false};
     bool m_filterExcluded{false};
 

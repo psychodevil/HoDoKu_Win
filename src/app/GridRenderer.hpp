@@ -103,6 +103,7 @@ public:
 
         int selectedCell = studio.get_selected_cell();
         int activeFilter = studio.get_active_filter();
+        uint16_t filterMask = studio.get_filter_mask();
         bool filterBivalue = studio.is_bivalue_filter();
         bool filterExcluded = studio.is_filter_excluded_mode();
         BitSet81 conflictCells = board.get_invalid_conflict_cells();
@@ -123,8 +124,18 @@ public:
             }
 
             // Priority 2: Filter mode (Possible vs Excluded)
-            if (activeFilter > 0) {
-                bool candidateValid = board.has_candidate(cell, activeFilter);
+            if (activeFilter > 0 || filterMask != 0) {
+                bool candidateValid = false;
+                if (activeFilter > 0) {
+                    candidateValid = board.has_candidate(cell, activeFilter);
+                } else if (filterMask != 0) {
+                    for (int d = 1; d <= 9; ++d) {
+                        if ((filterMask & (1u << d)) && board.has_candidate(cell, d)) {
+                            candidateValid = true;
+                            break;
+                        }
+                    }
+                }
                 if (!filterExcluded) {
                     // Green mode: ONLY unfilled cells with the candidate are highlighted green (SudokuPanel.java line 2197)
                     if (board.is_unfilled(cell) && candidateValid) {
@@ -291,7 +302,7 @@ public:
                                 }
                             }
 
-                            bool isFilterMatch = (activeFilter == d);
+                            bool isFilterMatch = (activeFilter == d) || ((filterMask & (1u << d)) != 0);
                             Brush* cBrush = (isElim || isAssign || isFilterMatch) ? static_cast<Brush*>(&candHighlightBrush)
                                                                                   : static_cast<Brush*>(&candNormalBrush);
                             Font* f = (isFilterMatch || isAssign) ? &candBoldFont : &candFont;
