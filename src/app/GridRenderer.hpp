@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include "AppTypes.hpp"
 #include "StudioModel.hpp"
 
@@ -83,6 +84,48 @@ public:
             SolidBrush glintBrush(Color(240, 255, 255, 255));
             g.FillEllipse(&glintBrush, hx - 1.0f, hy - 1.0f, 2.5f, 2.5f);
         }
+    }
+
+    void get_candidate_snap_point(int cell, int digit, float& outX, float& outY) const {
+        float subCell = m_cellSize / 3.0f;
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+        if (digit >= 1 && digit <= 9) {
+            int dr = (digit - 1) / 3;
+            int dc = (digit - 1) % 3;
+            outX = m_offsetX + c * m_cellSize + (dc + 0.5f) * subCell;
+            outY = m_offsetY + r * m_cellSize + (dr + 0.5f) * subCell;
+        } else {
+            outX = m_offsetX + (c + 0.5f) * m_cellSize;
+            outY = m_offsetY + (r + 0.5f) * m_cellSize;
+        }
+    }
+
+    void draw_directed_link(Graphics& g, float x1, float y1, float x2, float y2,
+                            bool fromCand, bool toCand, float candHeight, Pen& pen) const {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float dist = std::hypot(dx, dy);
+        if (dist < 2.0f) return;
+
+        // Inset start and end points outside candidate circles (matching HoDoKu adjustEndPoints)
+        float offset1 = fromCand ? (candHeight * 0.5f + 2.0f) : (m_cellSize * 0.2f);
+        float offset2 = toCand ? (candHeight * 0.5f + 2.0f) : (m_cellSize * 0.2f);
+
+        if (offset1 + offset2 >= dist - 4.0f) {
+            float factor = (dist > 6.0f) ? ((dist - 6.0f) / (offset1 + offset2)) : 0.0f;
+            offset1 *= factor;
+            offset2 *= factor;
+        }
+
+        float ux = dx / dist;
+        float uy = dy / dist;
+        float sx = x1 + ux * offset1;
+        float sy = y1 + uy * offset1;
+        float ex = x2 - ux * offset2;
+        float ey = y2 - uy * offset2;
+
+        g.DrawLine(&pen, sx, sy, ex, ey);
     }
 
     void render_grid_canvas(Graphics& g, const HoDoKuStudio& studio, int x, int y, int width, int height) {
@@ -326,7 +369,7 @@ public:
             }
         }
 
-        // 5. Chain Links (HoDoKu ARROW_COLOR = Color.RED / Green for strong)
+        // 5. Chain Links from Hint / Solution Step (HoDoKu ARROW_COLOR = Color.RED / Green for strong)
         if (showStepOverlays && activeStep && !activeStep->links.empty()) {
             AdjustableArrowCap arrowCap(3.5f, 3.5f, true);
 
@@ -338,25 +381,63 @@ public:
             weakPen.SetCustomEndCap(&arrowCap);
 
             for (const auto& link : activeStep->links) {
-                float x1, y1, x2, y2;
-                if (link.from_digit >= 1 && link.from_digit <= 9) {
-                    x1 = m_offsetX + cell_col(link.from_cell) * m_cellSize + ((link.from_digit - 1) % 3 + 0.5f) * subCell;
-                    y1 = m_offsetY + cell_row(link.from_cell) * m_cellSize + ((link.from_digit - 1) / 3 + 0.5f) * subCell;
-                } else {
-                    x1 = m_offsetX + (cell_col(link.from_cell) + 0.5f) * m_cellSize;
-                    y1 = m_offsetY + (cell_row(link.from_cell) + 0.5f) * m_cellSize;
-                }
-
-                if (link.to_digit >= 1 && link.to_digit <= 9) {
-                    x2 = m_offsetX + cell_col(link.to_cell) * m_cellSize + ((link.to_digit - 1) % 3 + 0.5f) * subCell;
-                    y2 = m_offsetY + cell_row(link.to_cell) * m_cellSize + ((link.to_digit - 1) / 3 + 0.5f) * subCell;
-                } else {
-                    x2 = m_offsetX + (cell_col(link.to_cell) + 0.5f) * m_cellSize;
-                    y2 = m_offsetY + (cell_row(link.to_cell) + 0.5f) * m_cellSize;
-                }
+                float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f;
+                bool fromCand = (link.from_digit >= 1 && link.from_digit <= 9);
+                bool toCand = (link.to_digit >= 1 && link.to_digit <= 9);
+                get_candidate_snap_point(link.from_cell, link.from_digit, x1, y1);
+                get_candidate_snap_point(link.to_cell, link.to_digit, x2, y2);
 
                 Pen* p = link.is_strong ? &strongPen : &weakPen;
-                g.DrawLine(p, x1, y1, x2, y2);
+                draw_directed_link(g, x1, y1, x2, y2, fromCand, toCand, candHeight, *p);
+            }
+        }
+
+        // 6. User Manual Inference Links (Plan 6.3)
+        const auto& userLinks = studio.get_user_links();
+        if (!userLinks.empty() || studio.has_link_start()) {
+            AdjustableArrowCap arrowCap(3.5f, 3.5f, true);
+
+            // Strong link: solid line with arrow cap (HoDoKu royal blue)
+            Pen userStrongPen(Color(240, 37, 99, 235), 2.2f);
+            userStrongPen.SetCustomEndCap(&arrowCap);
+
+            // Weak link: dashed line with arrow cap (HoDoKu amber / orange)
+            Pen userWeakPen(Color(240, 234, 88, 12), 2.0f);
+            userWeakPen.SetDashStyle(DashStyleDash);
+            userWeakPen.SetCustomEndCap(&arrowCap);
+
+            for (const auto& link : userLinks) {
+                float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f;
+                bool fromCand = (link.from_digit >= 1 && link.from_digit <= 9);
+                bool toCand = (link.to_digit >= 1 && link.to_digit <= 9);
+                get_candidate_snap_point(link.from_cell, link.from_digit, x1, y1);
+                get_candidate_snap_point(link.to_cell, link.to_digit, x2, y2);
+
+                Pen& p = link.is_strong ? userStrongPen : userWeakPen;
+                draw_directed_link(g, x1, y1, x2, y2, fromCand, toCand, candHeight, p);
+            }
+
+            // Live preview arrow while actively drawing a link
+            if (studio.has_link_start() && studio.get_hovered_cell() >= 0 && studio.get_hovered_candidate() > 0) {
+                int startCell = studio.get_link_start_cell();
+                int startDigit = studio.get_link_start_digit();
+                int hoverCell = studio.get_hovered_cell();
+                int hoverDigit = studio.get_hovered_candidate();
+
+                if (startCell != hoverCell || startDigit != hoverDigit) {
+                    float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f;
+                    get_candidate_snap_point(startCell, startDigit, x1, y1);
+                    get_candidate_snap_point(hoverCell, hoverDigit, x2, y2);
+
+                    Color previewColor = studio.is_drawing_strong_link()
+                        ? Color(180, 37, 99, 235)
+                        : Color(180, 234, 88, 12);
+                    Pen previewPen(previewColor, 2.0f);
+                    previewPen.SetDashStyle(DashStyleDash);
+                    previewPen.SetCustomEndCap(&arrowCap);
+
+                    draw_directed_link(g, x1, y1, x2, y2, true, true, candHeight, previewPen);
+                }
             }
         }
     }

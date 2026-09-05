@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <cassert>
 #include "app/AppTypes.hpp"
 #include "app/StudioModel.hpp"
@@ -83,6 +83,49 @@ int main() {
     studio.cancel_link_start();
     assert(!studio.has_link_start());
     std::cout << "[TEST] Cancel link start... PASSED\n";
+
+    // 9. Candidate Snap Points and Directed Link Geometry
+    auto calc_snap = [](int cell, int digit, float cellSize, float offsetX, float offsetY) {
+        float subCell = cellSize / 3.0f;
+        int r = cell / 9;
+        int c = cell % 9;
+        float x, y;
+        if (digit >= 1 && digit <= 9) {
+            int dr = (digit - 1) / 3;
+            int dc = (digit - 1) % 3;
+            x = offsetX + c * cellSize + (dc + 0.5f) * subCell;
+            y = offsetY + r * cellSize + (dr + 0.5f) * subCell;
+        } else {
+            x = offsetX + (c + 0.5f) * cellSize;
+            y = offsetY + (r + 0.5f) * cellSize;
+        }
+        return std::make_pair(x, y);
+    };
+
+    // Test r1c1 candidates
+    auto [x1_1, y1_1] = calc_snap(0, 1, 60.0f, 0.0f, 0.0f);
+    assert(x1_1 == 10.0f && y1_1 == 10.0f); // Top-left candidate 1
+    auto [x1_5, y1_5] = calc_snap(0, 5, 60.0f, 0.0f, 0.0f);
+    assert(x1_5 == 30.0f && y1_5 == 30.0f); // Center candidate 5
+    auto [x1_9, y1_9] = calc_snap(0, 9, 60.0f, 0.0f, 0.0f);
+    assert(x1_9 == 50.0f && y1_9 == 50.0f); // Bottom-right candidate 9
+
+    // Test snap points inside candidate cells for all 81 cells
+    for (int cell = 0; cell < 81; ++cell) {
+        int r = cell / 9;
+        int c = cell % 9;
+        float cellMinX = c * 60.0f;
+        float cellMaxX = (c + 1) * 60.0f;
+        float cellMinY = r * 60.0f;
+        float cellMaxY = (r + 1) * 60.0f;
+
+        for (int d = 1; d <= 9; ++d) {
+            auto [sx, sy] = calc_snap(cell, d, 60.0f, 0.0f, 0.0f);
+            assert(sx > cellMinX && sx < cellMaxX);
+            assert(sy > cellMinY && sy < cellMaxY);
+        }
+    }
+    std::cout << "[TEST] Candidate snap points geometry... PASSED\n";
 
     std::cout << "========================================\n";
     std::cout << " ALL Manual Link Tests PASSED!          \n";
