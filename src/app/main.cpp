@@ -97,8 +97,20 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
     bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     bool isAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
-    // 0. Escape: In main window, ends coloring mode or clears active hint step
+    // 0. Escape: In main window, cancels link start/mode, ends coloring mode, or clears active hint step
     if (wParam == VK_ESCAPE) {
+        if (g_studio->has_link_start()) {
+            g_studio->cancel_link_start();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (g_studio->is_link_mode()) {
+            g_studio->set_link_mode(false);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
         if (g_studio->get_active_color_index() != -1) {
             g_studio->set_active_color_index(-1);
             for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
@@ -410,6 +422,14 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
         }
+
+        // [Ctrl][Delete]: Clear user-drawn inference links
+        if (wParam == VK_DELETE) {
+            g_studio->clear_user_links();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
 
     // 8. Digits 1..9 or Numpad 1..9: Set Cell Value
@@ -454,6 +474,22 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             g_studio->set_active_color_index(-1);
             for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
             if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+    }
+
+    // 11. Manual Link Drawing: Shift+L (toggle link mode), Shift+K (toggle strong/weak link type)
+    if (isShift && !isCtrl && !isAlt) {
+        if (wParam == 'L') {
+            g_studio->toggle_link_mode();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (wParam == 'K') {
+            g_studio->toggle_link_type();
             UpdateStatusBarText(*g_studio);
             InvalidateRect(g_hwnd, NULL, FALSE);
             return true;
@@ -597,6 +633,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             }
 
+            if (g_studio->is_link_mode() && !isCtrl && !isShift) {
+                int candDigit = g_renderer.hit_test_candidate(x, y, cell);
+                if (candDigit > 0 && g_studio->get_board().has_candidate(cell, candDigit)) {
+                    g_studio->handle_candidate_link_click(cell, candDigit);
+                    UpdateStatusBarText(*g_studio);
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+            }
+
             if (isCtrl) {
                 // Ctrl + Click: toggle cell in multi-selection (SudokuPanel.java lines 872-891)
                 if (g_studio->get_selected_cells().empty()) {
@@ -643,6 +689,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         int cell = g_renderer.hit_test_grid(x, y);
         if (cell >= 0 && g_studio) {
             SetFocus(hwnd);
+
+            if (g_studio->is_link_mode()) {
+                if (g_studio->has_link_start()) {
+                    g_studio->cancel_link_start();
+                } else {
+                    g_studio->toggle_link_type();
+                }
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
             g_studio->set_selected_cell(cell);
 
             if (g_studio->get_active_color_index() >= 0) {
@@ -803,6 +861,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_MODE_CHECK_PROGRESS) {
             DoCheckProgress(hwnd, *g_studio);
+        } else if (id == IDM_MODE_DRAW_LINKS) {
+            g_studio->toggle_link_mode();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_LINK_TYPE) {
+            g_studio->toggle_link_type();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (id == IDM_MODE_LINK_CLEAR) {
+            g_studio->clear_user_links();
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
         } else if (id == IDM_FILE_COPY_GIVENS) {
             SetClipboardText(hwnd, g_studio->export_givens_string());
         } else if (id == IDM_FILE_COPY_PM) {

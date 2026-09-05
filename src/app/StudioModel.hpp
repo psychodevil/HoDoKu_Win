@@ -102,6 +102,8 @@ public:
                 m_initialBoard = m_board;
                 m_undoStack.clear();
                 m_redoStack.clear();
+                m_userLinks.clear();
+                cancel_link_start();
                 m_cellColors.fill(COLOR_NONE);
                 for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
                 m_activeCandidateColor = -1;
@@ -153,6 +155,8 @@ public:
         m_activeCandidateColor = -1;
         m_undoStack.clear();
         m_redoStack.clear();
+        m_userLinks.clear();
+        cancel_link_start();
         recalculate_solution_path();
         recalculate_fas();
         update_solution();
@@ -182,12 +186,14 @@ public:
         m_activeCandidateColor = -1;
         m_undoStack.clear();
         m_redoStack.clear();
+        m_userLinks.clear();
+        cancel_link_start();
         recalculate_solution_path();
         recalculate_fas();
     }
 
     void push_undo() {
-        m_undoStack.push_back({m_board, m_cellColors, m_candidateColors});
+        m_undoStack.push_back({m_board, m_cellColors, m_candidateColors, m_userLinks});
         m_redoStack.clear();
     }
 
@@ -196,12 +202,14 @@ public:
 
     void undo() {
         if (!can_undo()) return;
-        m_redoStack.push_back({m_board, m_cellColors, m_candidateColors});
+        m_redoStack.push_back({m_board, m_cellColors, m_candidateColors, m_userLinks});
         auto snap = m_undoStack.back();
         m_undoStack.pop_back();
         m_board = snap.board;
         m_cellColors = snap.cellColors;
         m_candidateColors = snap.candColors;
+        m_userLinks = snap.userLinks;
+        cancel_link_start();
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
         recalculate_solution_path();
@@ -210,12 +218,14 @@ public:
 
     void redo() {
         if (!can_redo()) return;
-        m_undoStack.push_back({m_board, m_cellColors, m_candidateColors});
+        m_undoStack.push_back({m_board, m_cellColors, m_candidateColors, m_userLinks});
         auto snap = m_redoStack.back();
         m_redoStack.pop_back();
         m_board = snap.board;
         m_cellColors = snap.cellColors;
         m_candidateColors = snap.candColors;
+        m_userLinks = snap.userLinks;
+        cancel_link_start();
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
         recalculate_solution_path();
@@ -850,13 +860,14 @@ public:
         BoardState board;
         std::array<int8_t, TOTAL_CELLS> cellColors{};
         std::array<std::array<int8_t, 9>, TOTAL_CELLS> candidateColors{};
+        std::vector<ManualLink> userLinks{};
     };
 
     void add_savepoint(std::string name = "") {
         if (name.empty()) {
             name = "Bookmark " + std::to_string(m_savepoints.size() + 1);
         }
-        m_savepoints.push_back({std::move(name), m_board, m_cellColors, m_candidateColors});
+        m_savepoints.push_back({std::move(name), m_board, m_cellColors, m_candidateColors, m_userLinks});
     }
 
     bool restore_savepoint(size_t index) {
@@ -866,6 +877,8 @@ public:
         m_board = sp.board;
         m_cellColors = sp.cellColors;
         m_candidateColors = sp.candidateColors;
+        m_userLinks = sp.userLinks;
+        cancel_link_start();
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
         recalculate_solution_path();
@@ -981,6 +994,90 @@ public:
     const std::vector<Step>& get_fas_steps() const { return m_fasSteps; }
     const BoardState& get_board() const { return m_board; }
 
+    // Manual Link Creation and Management
+    bool is_link_mode() const noexcept { return m_linkMode; }
+    void set_link_mode(bool enable) {
+        m_linkMode = enable;
+        if (!enable) cancel_link_start();
+    }
+    void toggle_link_mode() {
+        set_link_mode(!m_linkMode);
+    }
+    bool is_drawing_strong_link() const noexcept { return m_drawStrongLinks; }
+    void set_drawing_strong_link(bool strong) noexcept { m_drawStrongLinks = strong; }
+    void toggle_link_type() noexcept { m_drawStrongLinks = !m_drawStrongLinks; }
+
+    bool has_link_start() const noexcept { return m_linkStartCell >= 0 && m_linkStartDigit >= 1; }
+    int get_link_start_cell() const noexcept { return m_linkStartCell; }
+    int get_link_start_digit() const noexcept { return m_linkStartDigit; }
+
+    void start_link(int cell, int digit) noexcept {
+        if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return;
+        m_linkStartCell = cell;
+        m_linkStartDigit = digit;
+    }
+
+    void cancel_link_start() noexcept {
+        m_linkStartCell = -1;
+        m_linkStartDigit = -1;
+    }
+
+    bool finish_link(int to_cell, int to_digit) {
+        if (!has_link_start()) return false;
+        if (to_cell < 0 || to_cell >= TOTAL_CELLS || to_digit < 1 || to_digit > 9) {
+            cancel_link_start();
+            return false;
+        }
+        if (m_linkStartCell == to_cell && m_linkStartDigit == to_digit) {
+            cancel_link_start();
+            return false;
+        }
+
+        push_undo();
+
+        ManualLink newLink{m_linkStartCell, m_linkStartDigit, to_cell, to_digit, m_drawStrongLinks};
+
+        auto it = std::find(m_userLinks.begin(), m_userLinks.end(), newLink);
+        if (it != m_userLinks.end()) {
+            m_userLinks.erase(it);
+        } else {
+            bool replaced = false;
+            for (auto& l : m_userLinks) {
+                if ((l.from_cell == m_linkStartCell && l.from_digit == m_linkStartDigit &&
+                     l.to_cell == to_cell && l.to_digit == to_digit) ||
+                    (l.from_cell == to_cell && l.from_digit == to_digit &&
+                     l.to_cell == m_linkStartCell && l.to_digit == m_linkStartDigit)) {
+                    l.is_strong = m_drawStrongLinks;
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                m_userLinks.push_back(newLink);
+            }
+        }
+
+        cancel_link_start();
+        return true;
+    }
+
+    void handle_candidate_link_click(int cell, int digit) {
+        if (!has_link_start()) {
+            start_link(cell, digit);
+        } else {
+            finish_link(cell, digit);
+        }
+    }
+
+    const std::vector<ManualLink>& get_user_links() const noexcept { return m_userLinks; }
+    void clear_user_links() {
+        if (!m_userLinks.empty()) {
+            push_undo();
+            m_userLinks.clear();
+        }
+        cancel_link_start();
+    }
+
 private:
     BoardState m_board;
     BoardState m_initialBoard;
@@ -990,6 +1087,11 @@ private:
 
     std::vector<StudioSnapshot> m_undoStack;
     std::vector<StudioSnapshot> m_redoStack;
+    std::vector<ManualLink> m_userLinks;
+    bool m_linkMode{false};
+    bool m_drawStrongLinks{true};
+    int m_linkStartCell{-1};
+    int m_linkStartDigit{-1};
     std::array<int8_t, TOTAL_CELLS> m_cellColors{};
     std::array<std::array<int8_t, 9>, TOTAL_CELLS> m_candidateColors{};
     int m_activeCandidateColor{-1};

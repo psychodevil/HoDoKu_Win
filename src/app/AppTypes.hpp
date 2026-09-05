@@ -143,6 +143,9 @@ enum MenuAndControlId {
     IDM_MODE_PRACTICING = 9103,
     IDM_MODE_CONFIG_TRAINING = 9104,
     IDM_MODE_CHECK_PROGRESS = 9105,
+    IDM_MODE_DRAW_LINKS = 9106,
+    IDM_MODE_LINK_TYPE = 9107,
+    IDM_MODE_LINK_CLEAR = 9108,
 
     // Toolbar Controls
     IDC_BTN_UNDO = 3001,
@@ -201,11 +204,27 @@ enum MenuAndControlId {
 
 constexpr int8_t COLOR_NONE = -1;
 
+// Manual inference link drawn by user
+struct ManualLink {
+    int from_cell{0};
+    int from_digit{0};
+    int to_cell{0};
+    int to_digit{0};
+    bool is_strong{true}; // true: strong link (conjugate), false: weak link (conflict)
+
+    bool operator==(const ManualLink& o) const noexcept {
+        return from_cell == o.from_cell && from_digit == o.from_digit &&
+               to_cell == o.to_cell && to_digit == o.to_digit &&
+               is_strong == o.is_strong;
+    }
+};
+
 // Snapshot for Undo / Redo
 struct StudioSnapshot {
     BoardState board;
     std::array<int8_t, TOTAL_CELLS> cellColors;
     std::array<std::array<int8_t, 9>, TOTAL_CELLS> candColors;
+    std::vector<ManualLink> userLinks;
 };
 
 // Sample puzzles for each HoDoKu level

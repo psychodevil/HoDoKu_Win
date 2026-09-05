@@ -342,7 +342,16 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     int hCell = studio.get_hovered_cell();
     int hCand = studio.get_hovered_candidate();
 
-    if (!studio.get_selected_cells().empty() && hCell < 0) {
+    if (studio.is_link_mode()) {
+        std::wstring linkKind = studio.is_drawing_strong_link() ? L"Strong Link (Solid)" : L"Weak Link (Dashed)";
+        if (studio.has_link_start()) {
+            int sr = cell_row(studio.get_link_start_cell()) + 1;
+            int sc = cell_col(studio.get_link_start_cell()) + 1;
+            part1 = L" [Link Mode: " + linkKind + L"] Start: r" + std::to_wstring(sr) + L"c" + std::to_wstring(sc) + L":" + std::to_wstring(studio.get_link_start_digit()) + L" -> Click target candidate (Esc/Right-Click cancels)";
+        } else {
+            part1 = L" [Link Mode: " + linkKind + L"] Click candidate to start link (Shift+K: toggle type, Shift+L: exit)";
+        }
+    } else if (!studio.get_selected_cells().empty() && hCell < 0) {
         int count = studio.get_selected_cells().count();
         int actR = cell_row(studio.get_selected_cell()) + 1;
         int actC = cell_col(studio.get_selected_cell()) + 1;
@@ -392,17 +401,20 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
     int progress = static_cast<int>((81 - freeCells) * 100.0f / 81.0f);
 
     std::wstring modeStr = L"Playing";
-    if (studio.get_game_mode() == GameMode::Learning) {
+    if (studio.is_link_mode()) {
+        modeStr = studio.is_drawing_strong_link() ? L"Draw Links (Strong)" : L"Draw Links (Weak)";
+    } else if (studio.get_game_mode() == GameMode::Learning) {
         modeStr = L"Learning (Tutor Active)";
     } else if (studio.get_game_mode() == GameMode::Practicing) {
         modeStr = L"Practicing (Training Active)";
     }
 
     std::wstring part2 = L" Progress: " + std::to_wstring(progress) + L"% (" + std::to_wstring(freeCells) + L" free)  |  Mode: " + modeStr;
+    std::wstring part3 = !studio.get_user_links().empty() ? L" Links: " + std::to_wstring(studio.get_user_links().size()) : L"";
 
     SendMessageW(g_hStatusBar, SB_SETTEXT, 0, (LPARAM)part1.c_str());
     SendMessageW(g_hStatusBar, SB_SETTEXT, 1, (LPARAM)part2.c_str());
-    SendMessageW(g_hStatusBar, SB_SETTEXT, 2, (LPARAM)L"");
+    SendMessageW(g_hStatusBar, SB_SETTEXT, 2, (LPARAM)part3.c_str());
 }
 
 inline void LayoutHoDoKuControls(HWND hwnd, int width, int height) {
@@ -746,6 +758,10 @@ inline HMENU CreateHoDoKuMenuBar() {
     AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CHECK_PROGRESS, L"&Check Progress (Tutor)\tCtrl+T");
     AppendMenuW(hMode, MF_STRING, IDM_MODE_CONFIG_TRAINING, L"&Configure Training Techniques...");
+    AppendMenuW(hMode, MF_SEPARATOR, 0, NULL);
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_DRAW_LINKS, L"&Draw Chains / Links\tShift+L");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_LINK_TYPE, L"Toggle Strong/Weak &Link Type\tShift+K");
+    AppendMenuW(hMode, MF_STRING, IDM_MODE_LINK_CLEAR, L"Clear &Drawn Links\tCtrl+Del");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR)hMode, L"&Mode");
 
     // Options Menu

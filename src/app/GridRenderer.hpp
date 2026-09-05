@@ -310,6 +310,12 @@ public:
                             std::wstring candStr = std::to_wstring(d);
                             g.DrawString(candStr.c_str(), -1, f, candRect, &centerFmt, cBrush);
 
+                            // Highlight active link start candidate
+                            if (studio.has_link_start() && studio.get_link_start_cell() == cell && studio.get_link_start_digit() == d) {
+                                Pen linkStartPen(studio.is_drawing_strong_link() ? Color(255, 37, 99, 235) : Color(255, 234, 88, 12), 2.0f);
+                                g.DrawEllipse(&linkStartPen, kx + ovalOffset - 1.0f, ky + ovalOffset - 1.0f, candHeight + 2.0f, candHeight + 2.0f);
+                            }
+
                             if (isElim) {
                                 g.DrawLine(&elimStrikePen, kx + 2.0f, ky + 2.0f, kx + subCell - 2.0f, ky + subCell - 2.0f);
                                 g.DrawLine(&elimStrikePen, kx + subCell - 2.0f, ky + 2.0f, kx + 2.0f, ky + subCell - 2.0f);
