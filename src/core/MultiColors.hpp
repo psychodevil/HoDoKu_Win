@@ -93,12 +93,13 @@ public:
                 setA.for_each_cell([&](int u) {
                     if (conflict) return;
                     if ((setB & GRID.peer_bitsets[u]).any()) {
+                        conflict = true;
                     }
                 });
                 return conflict;
             };
 
-            // 2. Multi-Colors Type 1:
+            // 2. Multi-Colors Type 2 (Color Wrap between clusters):
             // If cluster A (color cA) conflicts with BOTH color 0 AND color 1 of cluster B:
             // Then cluster A (color cA) cannot be true! Eliminate candidate d from all cells in that set!
             for (size_t i = 0; i < clusters.size(); ++i) {
@@ -114,10 +115,10 @@ public:
 
                         if (conflict0 && conflict1) {
                             Step step;
-                            step.type = TechniqueType::MultiColors1;
-                            step.difficulty = DifficultyLevel::Hard;
-                            step.score = 140;
-                            step.name = "Multi-Colors Type 1 (Wrap)";
+                            step.type = TechniqueType::MultiColors2;
+                            step.difficulty = DifficultyLevel::Unfair;
+                            step.score = 190;
+                            step.name = "Multi-Colors Type 2";
 
                             for (int cell : cellsA) {
                                 step.eliminations.push_back({cell, d});
@@ -127,7 +128,7 @@ public:
                             clusters[j].mask0.for_each_cell([&](int c) { step.secondary_cells.set(c); });
                             clusters[j].mask1.for_each_cell([&](int c) { step.secondary_cells.set(c); });
 
-                            step.explanation = "Multi-Colors Type 1 on candidate " + std::to_string(d) +
+                            step.explanation = "Multi-Colors Type 2 on candidate " + std::to_string(d) +
                                                ": Cluster " + std::to_string(i + 1) + " sees both colors of Cluster " +
                                                std::to_string(j + 1) + ", eliminating candidate " + std::to_string(d) +
                                                " from " + std::to_string(step.eliminations.size()) + " cell(s).";
@@ -139,10 +140,10 @@ public:
                 }
             }
 
-            // 3. Multi-Colors Type 2 (Bridge / Trap):
-            // If cluster A (color 0) and cluster B (color 0) share a weak link:
-            // Then at least one of A(color 1) or B(color 1) must be true!
-            // Any candidate cell seeing a cell in A(color 1) AND a cell in B(color 1) can be eliminated!
+            // 3. Multi-Colors Type 1 (Bridge / Trap):
+            // If cluster A (color cA) and cluster B (color cB) share a weak link:
+            // Then at least one of oppA or oppB must be true!
+            // Any candidate cell seeing a cell in oppA AND a cell in oppB can be eliminated!
             for (size_t i = 0; i < clusters.size(); ++i) {
                 for (size_t j = i + 1; j < clusters.size(); ++j) {
                     for (int cA = 0; cA < 2; ++cA) {
@@ -163,15 +164,16 @@ public:
                                 oppB.for_each_cell([&](int v) { seenB |= GRID.peer_bitsets[v]; });
 
                                 BitSet81 elimCandidates = seenA & seenB;
+                                elimCandidates &= ~clusters[i].mask0;
                                 elimCandidates &= ~clusters[i].mask1;
                                 elimCandidates &= ~clusters[j].mask0;
                                 elimCandidates &= ~clusters[j].mask1;
 
                                 Step step;
-                                step.type = TechniqueType::MultiColors2;
-                                step.difficulty = DifficultyLevel::Hard;
-                                step.score = 140;
-                                step.name = "Multi-Colors Type 2 (Bridge)";
+                                step.type = TechniqueType::MultiColors1;
+                                step.difficulty = DifficultyLevel::Unfair;
+                                step.score = 190;
+                                step.name = "Multi-Colors Type 1";
 
                                 elimCandidates.for_each_cell([&](int cell) {
                                     if (board.has_candidate(cell, d)) {
@@ -184,7 +186,7 @@ public:
                                     oppA.for_each_cell([&](int c) { step.secondary_cells.set(c); });
                                     oppB.for_each_cell([&](int c) { step.secondary_cells.set(c); });
 
-                                    step.explanation = "Multi-Colors Type 2 on candidate " + std::to_string(d) +
+                                    step.explanation = "Multi-Colors Type 1 on candidate " + std::to_string(d) +
                                                        ": Clusters " + std::to_string(i + 1) + " and " +
                                                        std::to_string(j + 1) + " bridge eliminations for " +
                                                        std::to_string(step.eliminations.size()) + " cell(s).";

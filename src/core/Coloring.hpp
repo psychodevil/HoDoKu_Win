@@ -14,7 +14,7 @@ public:
         std::vector<Step> steps;
 
         for (int d = 1; d <= 9; ++d) {
-            // 1. Build adjacency list of strong links for digit d
+            // 1. Build conjugate pairs (strong links where house candidate count == 2)
             std::vector<std::vector<int>> adj(TOTAL_CELLS);
             BitSet81 nodes;
 
@@ -30,9 +30,9 @@ public:
                 }
             }
 
-            if (nodes.count() < 4) continue;
+            if (nodes.empty()) continue;
 
-            // 2. Find connected components and 2-color them
+            // 2. Find connected components of strong links and 2-color them
             std::vector<int> color(TOTAL_CELLS, -1);
             std::vector<bool> visited(TOTAL_CELLS, false);
 
@@ -41,10 +41,8 @@ public:
 
                 std::vector<int> comp_color0;
                 std::vector<int> comp_color1;
-                bool is_bipartite = true;
-                int conflict_u = -1;
-
                 std::queue<int> q;
+
                 visited[start_node] = true;
                 color[start_node] = 0;
                 comp_color0.push_back(start_node);
@@ -61,39 +59,47 @@ public:
                             if (color[v] == 0) comp_color0.push_back(v);
                             else comp_color1.push_back(v);
                             q.push(v);
-                        } else if (color[v] == color[u]) {
-                            is_bipartite = false;
-                            conflict_u = u;
                         }
                     }
                 }
 
+                if (comp_color0.empty() || comp_color1.empty()) return;
+
                 // Rule 2: Color Wrap (Two cells of the same color share a house)
-                int wrap_bad_color = -1;
-                if (!is_bipartite) {
-                    wrap_bad_color = color[conflict_u];
-                } else {
-                    // Check if any two cells of color 0 or color 1 see each other
-                    for (int c = 0; c < 2; ++c) {
-                        const auto& list = (c == 0) ? comp_color0 : comp_color1;
-                        size_t sz = list.size();
-                        for (size_t i = 0; i < sz && wrap_bad_color == -1; ++i) {
-                            for (size_t j = i + 1; j < sz; ++j) {
-                                if (get_peer_bitset(list[i]).test(list[j])) {
-                                    wrap_bad_color = c;
-                                    break;
-                                }
+                bool wrap0 = false;
+                for (size_t i = 0; i < comp_color0.size() && !wrap0; ++i) {
+                    for (size_t j = i + 1; j < comp_color0.size(); ++j) {
+                        if (GRID.peer_bitsets[comp_color0[i]].test(comp_color0[j])) {
+                            wrap0 = true;
+                            break;
+                        }
+                    }
+                }
+
+                bool wrap1 = false;
+                for (size_t i = 0; i < comp_color1.size() && !wrap1; ++i) {
+                    for (size_t j = i + 1; j < comp_color1.size(); ++j) {
+                        if (GRID.peer_bitsets[comp_color1[i]].test(comp_color1[j])) {
+                            wrap1 = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (wrap0 || wrap1) {
+                    std::vector<CandidateElimination> elims;
+                    if (wrap0) {
+                        for (int cell : comp_color0) {
+                            if (board.is_unfilled(cell) && board.has_candidate(cell, d)) {
+                                elims.push_back({cell, d});
                             }
                         }
                     }
-                }
-
-                if (wrap_bad_color != -1) {
-                    const auto& bad_cells = (wrap_bad_color == 0) ? comp_color0 : comp_color1;
-                    std::vector<CandidateElimination> elims;
-                    for (int cell : bad_cells) {
-                        if (board.is_unfilled(cell) && board.has_candidate(cell, d)) {
-                            elims.push_back({cell, d});
+                    if (wrap1) {
+                        for (int cell : comp_color1) {
+                            if (board.is_unfilled(cell) && board.has_candidate(cell, d)) {
+                                elims.push_back({cell, d});
+                            }
                         }
                     }
 
@@ -115,10 +121,10 @@ public:
                 } else {
                     // Rule 1: Color Trap (Uncolored cell sees both Color 0 and Color 1)
                     BitSet81 seen_by_c0;
-                    for (int c : comp_color0) seen_by_c0 |= get_peer_bitset(c);
+                    for (int c : comp_color0) seen_by_c0 |= GRID.peer_bitsets[c];
 
                     BitSet81 seen_by_c1;
-                    for (int c : comp_color1) seen_by_c1 |= get_peer_bitset(c);
+                    for (int c : comp_color1) seen_by_c1 |= GRID.peer_bitsets[c];
 
                     BitSet81 common_seen = seen_by_c0 & seen_by_c1;
                     for (int c : comp_color0) common_seen.reset(c);
