@@ -1,4 +1,4 @@
-# Overall Project Progress: 100% (83 completed / 83 total tasks)
+# Overall Project Progress: 74% (83 completed / 112 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -276,3 +276,124 @@ High-level architectural objective: Provide interactive tutor validation, CLI au
 - **Granular Checklist:**
   - [x] Implement custom pattern designer enabling users to specify exact given cell positions for generator digging.
   - [x] Add multi-puzzle print layout options (2, 4, or 6 puzzles per page) for printable Sudoku booklets.
+
+---
+
+## Goal 7: Advanced Sudoku Variants & Extended Constraint Engine
+High-level architectural objective: Extend the core exact cover matrix and candidate propagation system to support major Sudoku variants without compromising speed.
+
+### Implementation Plan 7.1: Diagonal (X-Sudoku) & Hyper-Sudoku (Windoku) Constraints
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Add 2 diagonal houses (main and anti-diagonal) to exact cover column constraints.
+  - Add 4 internal 3x3 window houses for Hyper-Sudoku.
+  - **Definition of Done:** DLX solver and candidate engine recognize diagonal and window constraints; correctly detect conflicts and single/subset techniques across extended houses.
+- **Granular Checklist:**
+  - [ ] Implement `DiagonalBitboards` mapping main and anti-diagonal houses.
+  - [ ] Implement `HyperSudokuWindows` mapping the four 3x3 interior window regions.
+  - [ ] Integrate diagonal and window constraint columns into `DlxSolver` exact cover matrix.
+  - [ ] Support Diagonal and Windoku mode toggling in UI and generator.
+
+### Implementation Plan 7.2: Killer Sudoku Arithmetic & Cage Elimination
+- **Planned Impact:** 3%
+- **Technical Approach & DoD:**
+  - Define arbitrary cell cages with target sums and unique digit constraints.
+  - Implement cage candidate filters using precomputed integer partition lookup tables.
+  - **Definition of Done:** Solve Killer Sudoku puzzles using cage arithmetic reductions and exact cover modeling.
+- **Granular Checklist:**
+  - [ ] Implement `Cage` structure with cell bitmask, target sum, and precomputed integer partitions.
+  - [ ] Implement cage candidate propagation eliminating candidates incompatible with target sum combinations.
+  - [ ] Add Killer 45-rule house sum deduction technique.
+  - [ ] Add Killer Sudoku interactive cage rendering in `GridRenderer`.
+
+### Implementation Plan 7.3: Jigsaw (Irregular / Nonomino) Region Support
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Support arbitrary 9-cell nonomino regions replacing standard 3x3 boxes.
+  - Adapt all house-based solving techniques (Locked Candidates, Fish, Subsets) to nonomino houses.
+  - **Definition of Done:** Load and solve irregular Sudoku puzzles with custom house definitions.
+- **Granular Checklist:**
+  - [ ] Support custom 9-cell irregular region maps in `BoardState`.
+  - [ ] Generalize box techniques (Pointing/Claiming, Subsets) to operate on arbitrary disjoint shapes.
+  - [ ] Implement thick border rendering around irregular boundaries in `GridRenderer`.
+
+---
+
+## Goal 8: Ultra-Scale SIMD Acceleration & Multi-Core Parallelism
+High-level architectural objective: Scale solving and generation throughput to millions of puzzles per second using advanced vector instruction sets and lock-free thread pooling.
+
+### Implementation Plan 8.1: AVX-512 & ARM64 NEON Vector Intrinsics
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Implement AVX-512 (512-bit registers) candidate propagation evaluating 4 boards simultaneously.
+  - Implement ARM64 NEON intrinsics for Snapdragon Windows on ARM devices.
+  - **Definition of Done:** Automatic runtime CPU feature detection (`CPUID`) choosing scalar, AVX2, AVX-512, or NEON code paths.
+- **Granular Checklist:**
+  - [ ] Implement runtime CPU feature dispatch for AVX-512F / AVX-512BW and ARM64 NEON.
+  - [ ] Vectorize 81-cell candidate updates using 512-bit ZMM registers for quad-puzzle batch solving.
+  - [ ] Implement ARM64 NEON SIMD bitset operations with zero performance regression.
+
+### Implementation Plan 8.2: Lock-Free Work-Stealing Batch Processing Thread Pool
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Implement a lock-free work-stealing queue thread pool for multi-core scaling across 16+ logical threads.
+  - Parallelize batch puzzle generation, brute-force backdoor scanning, and benchmark datasets.
+  - **Definition of Done:** Linear scaling up to CPU thread limit without lock contention or thread starvation.
+- **Granular Checklist:**
+  - [ ] Implement lock-free work-stealing task queue (`WorkStealingPool`).
+  - [ ] Parallelize batch generator to produce 10,000+ puzzles/sec across available CPU cores.
+  - [ ] Parallelize comprehensive FAS and backdoor search across solution paths.
+
+---
+
+## Goal 9: Modern UI/UX, Native Dark Mode & Vector Fluid Animations
+High-level architectural objective: Deliver a modern Windows 11 Fluent aesthetic with seamless Dark Mode support, smooth candidate animations, and touch/pen interaction.
+
+### Implementation Plan 9.1: Win32 Native Dark Mode & Desktop Window Manager (DWM) Styling
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Hook Windows 10/11 dark mode APIs (`DwmSetWindowAttribute`, `SetWindowTheme`, undocumented uxtheme ordinal 135).
+  - Provide auto-system theme following or explicit Light / Dark / OLED Black toggle.
+  - **Definition of Done:** Dialogs, menus, title bars, status bar, and canvas cleanly render dark themes with zero white flashing.
+- **Granular Checklist:**
+  - [ ] Hook DWM dark mode title bar and system theme change notifications (`WM_SETTINGCHANGE`).
+  - [ ] Create dark mode color schemes for UI canvas, givens, user digits, and pencilmarks.
+  - [ ] Owner-draw menus, tab controls, and dialog backgrounds with dark brushes.
+
+### Implementation Plan 9.2: Smooth Vector Animations & Elimination Transitions
+- **Planned Impact:** 1%
+- **Technical Approach & DoD:**
+  - Implement high-frequency timer animation pipeline (60/120 Hz) for candidate fade-out and digit pop-in.
+  - Add ripple/pulse effects when highlighting inference link chains.
+  - **Definition of Done:** Smooth 60+ FPS visual feedback on step execution and auto-play without CPU overhead.
+- **Granular Checklist:**
+  - [ ] Implement 60 FPS interpolation animation controller for candidate elimination fades.
+  - [ ] Add visual pulse glow along active strong/weak inference link paths.
+  - [ ] Provide user preference toggle to disable animations for instant accessibility mode.
+
+---
+
+## Goal 10: Advanced Export, Native Vector PDF & Interoperability
+High-level architectural objective: Enhance sharing, publishing, and puzzle exchange through standalone vector PDF generation, QR code scanning, and modern format support.
+
+### Implementation Plan 10.1: Native Vector PDF Document Writer
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Implement lightweight zero-dependency vector PDF writer generating crisp multi-page printable booklets.
+  - Include embedded vector outlines, table of contents, customizable booklet margins, and answer keys.
+  - **Definition of Done:** Produce valid standalone PDF files viewable in any PDF reader without external libraries.
+- **Granular Checklist:**
+  - [ ] Implement minimal zero-dependency PDF document builder (`PdfWriter`).
+  - [ ] Render vector Sudoku grids, candidate numbers, and headers directly into PDF streams.
+  - [ ] Support booklet layout options (1, 2, 4, 6 per page) with auto-generated solution pages in PDF.
+
+### Implementation Plan 10.2: QR Code Puzzle Encoding & Visual Sharing
+- **Planned Impact:** 1%
+- **Technical Approach & DoD:**
+  - Generate QR codes containing puzzle strings, difficulty rating, and solution path URLs.
+  - Support pasting clipboard images containing QR codes to automatically decode and load puzzles.
+  - **Definition of Done:** Encode any active puzzle into a QR code displayed in GUI or exported to PNG/PDF; decode puzzle from clipboard screenshot.
+- **Granular Checklist:**
+  - [ ] Implement compact QR code matrix generator for Sudoku strings and metadata.
+  - [ ] Display interactive QR Code dialog allowing users to scan with phone cameras.
+  - [ ] Support automatic puzzle extraction from clipboard images or screen captures.
