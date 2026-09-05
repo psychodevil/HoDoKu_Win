@@ -19,6 +19,7 @@
 #include "core/SueDeCoq.hpp"
 #include "core/StepFinder.hpp"
 #include "core/Generator.hpp"
+#include "core/DiagonalBitboards.hpp"
 
 using namespace hodoku::core;
 
@@ -526,6 +527,96 @@ void test_advanced_patterns() {
     std::cout << "\n[TEST] Advanced Solver Patterns (ER, Dual ER, Grouped AIC)... PASSED\n";
 }
 
+void test_diagonal_bitboards() {
+    std::cout << "[TEST] DiagonalBitboards (X-Sudoku constraints and peer sets)...";
+
+    // 1. Bitmasks and counts
+    const auto& main_diag = get_main_diagonal_bitset();
+    const auto& anti_diag = get_anti_diagonal_bitset();
+    const auto& all_diags = get_all_diagonals_bitset();
+
+    assert(main_diag.count() == 9);
+    assert(anti_diag.count() == 9);
+    assert(all_diags.count() == 17); // 9 + 9 - 1 (cell 40 intersection)
+
+    // Center cell (40 = r4c4) is the only intersection
+    BitSet81 intersection = main_diag & anti_diag;
+    assert(intersection.count() == 1);
+    assert(intersection.test(40));
+    assert(DIAGONALS.intersection_mask == intersection);
+
+    // 2. Cell coordinates & membership
+    for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+
+        bool expected_main = (r == c);
+        bool expected_anti = (r + c == 8);
+        bool expected_any = expected_main || expected_anti;
+        int expected_count = (expected_main ? 1 : 0) + (expected_anti ? 1 : 0);
+
+        assert(is_main_diagonal_cell(cell) == expected_main);
+        assert(is_anti_diagonal_cell(cell) == expected_anti);
+        assert(is_diagonal_cell(cell) == expected_any);
+        assert(get_diagonal_membership_count(cell) == expected_count);
+
+        // Diagonal peer bitset validation
+        const auto& diag_peers = get_diagonal_peer_bitset(cell);
+        assert(!diag_peers.test(cell)); // Cannot be peer to oneself
+
+        if (!expected_any) {
+            assert(diag_peers.empty());
+            assert(get_x_peer_count(cell) == 20);
+            assert(get_x_peer_bitset(cell) == GRID.peer_bitsets[cell]);
+        } else if (cell == 40) {
+            // Center cell belongs to both diagonals (8 peers on each = 16 diagonal peers)
+            assert(diag_peers.count() == 16);
+            assert(get_x_peer_count(cell) == 32);
+        } else {
+            // Non-center diagonal cell belongs to 1 diagonal (8 diagonal peers)
+            assert(diag_peers.count() == 8);
+            assert(get_x_peer_count(cell) == 26);
+        }
+
+        // Full X-Sudoku peers must contain standard peers
+        const auto& x_peers = get_x_peer_bitset(cell);
+        assert(GRID.peer_bitsets[cell].is_subset_of(x_peers));
+        assert(diag_peers.is_subset_of(x_peers));
+        assert(!x_peers.test(cell));
+
+        // X-Sudoku peer list consistency
+        const auto& peer_list = get_x_peer_cells(cell);
+        int count = get_x_peer_count(cell);
+        for (int i = 0; i < count; ++i) {
+            assert(x_peers.test(peer_list[i]));
+        }
+    }
+
+    // 3. Symmetry of X-Sudoku peer relationships: A in peers(B) <=> B in peers(A)
+    for (int a = 0; a < TOTAL_CELLS; ++a) {
+        for (int b = 0; b < TOTAL_CELLS; ++b) {
+            assert(get_x_peer_bitset(a).test(b) == get_x_peer_bitset(b).test(a));
+        }
+    }
+
+    // 4. House indexing and cell arrays
+    const auto& main_cells = get_diagonal_house_cells(DiagonalType::Main);
+    const auto& anti_cells = get_diagonal_house_cells(DiagonalType::Anti);
+
+    for (int i = 0; i < 9; ++i) {
+        assert(main_cells[i] == cell_index(i, i));
+        assert(anti_cells[i] == cell_index(i, 8 - i));
+    }
+
+    assert(get_diagonal_house_bitset(DiagonalType::Main) == main_diag);
+    assert(get_diagonal_house_bitset(DiagonalType::Anti) == anti_diag);
+
+    assert(get_diagonal_name(DiagonalType::Main) == "Main Diagonal (\\)");
+    assert(get_diagonal_name(DiagonalType::Anti) == "Anti-Diagonal (/)");
+
+    std::cout << " PASSED\n";
+}
+
 int main() {
     std::cout << "========================================\n";
     std::cout << " HoDoKu Native Core Engine Test Suite   \n";
@@ -535,6 +626,7 @@ int main() {
 
     test_bitset81();
     test_grid_constants();
+    test_diagonal_bitboards();
     test_board_state();
     test_dlx_solver();
     test_advanced_techniques();
