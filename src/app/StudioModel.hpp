@@ -121,6 +121,29 @@ public:
         }
     }
 
+    void load_puzzle(const BoardState& puz) {
+        m_initialBoard = puz;
+        m_board = m_initialBoard;
+        m_undoStack.clear();
+        m_redoStack.clear();
+        m_userLinks.clear();
+        cancel_link_start();
+        stop_auto_play();
+        clear_transition();
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
+        m_activeCandidateColor = -1;
+        m_selectedCell = 0;
+        m_selectedStep.reset();
+        m_hintLevel = HintLevel::None;
+        m_activeFilterDigit = 0;
+        m_filterMask = 0;
+        m_filterBivalue = false;
+        recalculate_solution_path();
+        recalculate_fas();
+        update_solution();
+    }
+
     void new_puzzle(int levelIndex) {
         DifficultyLevel lvl = static_cast<DifficultyLevel>(std::clamp(levelIndex, 0, 4));
         BoardState puz;

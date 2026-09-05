@@ -1667,5 +1667,558 @@ inline void ShowPreferencesDialog(HWND hParent) {
     }
 }
 
+// ============================================================================
+// 7. Custom Pattern Designer Dialog (Plan 6.5)
+// ============================================================================
+struct PatternDesignerDlgContext {
+    HoDoKuStudio* studio{nullptr};
+    HWND hDlg{NULL};
+    HWND hOwner{NULL};
+    HWND hCanvas{NULL};
+    HWND hLblGivens{NULL};
+    HWND hComboSymmetry{NULL};
+    HWND hComboPresets{NULL};
+    HWND hLblStatus{NULL};
+    hodoku::core::BitSet81 patternMask;
+    int hoveredCell{-1};
+    hodoku::core::SymmetryType currentSymmetry{hodoku::core::SymmetryType::Rotational180};
+    std::optional<hodoku::core::BoardState> cachedPuzzle;
+};
+
+enum PatternDlgControlId {
+    IDC_PATTERN_CANVAS = 6101,
+    IDC_PATTERN_GIVENS_LBL,
+    IDC_PATTERN_SYMMETRY_COMBO,
+    IDC_PATTERN_PRESETS_COMBO,
+    IDC_PATTERN_CLEAR_BTN,
+    IDC_PATTERN_INVERT_BTN,
+    IDC_PATTERN_COPY_BTN,
+    IDC_PATTERN_PASTE_BTN,
+    IDC_PATTERN_RANDOM_BTN,
+    IDC_PATTERN_CHECK_BTN,
+    IDC_PATTERN_GENERATE_BTN,
+    IDC_PATTERN_STATUS_LBL
+};
+
+inline void UpdatePatternGivensLabel(PatternDesignerDlgContext* ctx) {
+    if (!ctx || !ctx->hLblGivens) return;
+    int count = ctx->patternMask.count();
+    std::wstring text = L"Givens: " + std::to_wstring(count) + L" / 81";
+    if (count < 17) {
+        text += L"  (Warning: Min 17 required!)";
+    } else {
+        text += L"  (Valid count >= 17)";
+    }
+    SetWindowTextW(ctx->hLblGivens, text.c_str());
+}
+
+inline LRESULT CALLBACK PatternCanvasWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    PatternDesignerDlgContext* ctx = reinterpret_cast<PatternDesignerDlgContext*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
+    switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int w = rc.right - rc.left;
+        int h = rc.bottom - rc.top;
+
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
+        HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
+
+        HBRUSH hBgBrush = CreateSolidBrush(RGB(248, 250, 252));
+        FillRect(memDC, &rc, hBgBrush);
+        DeleteObject(hBgBrush);
+
+        int margin = 10;
+        int cellSize = 36;
+
+        if (ctx) {
+            for (int r = 0; r < 9; ++r) {
+                for (int c = 0; c < 9; ++c) {
+                    int cell = r * 9 + c;
+                    int x = margin + c * cellSize;
+                    int y = margin + r * cellSize;
+                    RECT cellRc = { x, y, x + cellSize, y + cellSize };
+
+                    bool isGiven = ctx->patternMask.test(cell);
+                    bool isHovered = (ctx->hoveredCell == cell);
+
+                    if (isGiven) {
+                        HBRUSH hGivenBrush = CreateSolidBrush(RGB(30, 58, 138));
+                        FillRect(memDC, &cellRc, hGivenBrush);
+                        DeleteObject(hGivenBrush);
+
+                        RECT innerRc = { x + 6, y + 6, x + cellSize - 6, y + cellSize - 6 };
+                        HBRUSH hInnerBrush = CreateSolidBrush(isHovered ? RGB(96, 165, 250) : RGB(59, 130, 246));
+                        FillRect(memDC, &innerRc, hInnerBrush);
+                        DeleteObject(hInnerBrush);
+                    } else {
+                        HBRUSH hEmptyBrush = CreateSolidBrush(isHovered ? RGB(239, 246, 255) : RGB(255, 255, 255));
+                        FillRect(memDC, &cellRc, hEmptyBrush);
+                        DeleteObject(hEmptyBrush);
+                    }
+
+                    HPEN hCellPen = CreatePen(PS_SOLID, 1, RGB(203, 213, 225));
+                    HGDIOBJ oldPen = SelectObject(memDC, hCellPen);
+                    MoveToEx(memDC, x, y + cellSize, NULL);
+                    LineTo(memDC, x + cellSize, y + cellSize);
+                    LineTo(memDC, x + cellSize, y);
+                    SelectObject(memDC, oldPen);
+                    DeleteObject(hCellPen);
+
+                    if (isHovered && !isGiven) {
+                        HPEN hHoverPen = CreatePen(PS_SOLID, 2, RGB(59, 130, 246));
+                        HGDIOBJ oldHoverPen = SelectObject(memDC, hHoverPen);
+                        HGDIOBJ oldNullBrush = SelectObject(memDC, GetStockObject(NULL_BRUSH));
+                        Rectangle(memDC, x + 1, y + 1, x + cellSize, y + cellSize);
+                        SelectObject(memDC, oldNullBrush);
+                        SelectObject(memDC, oldHoverPen);
+                        DeleteObject(hHoverPen);
+                    }
+                }
+            }
+
+            HPEN hThickPen = CreatePen(PS_SOLID, 3, RGB(15, 23, 42));
+            HGDIOBJ oldThickPen = SelectObject(memDC, hThickPen);
+            int gridSpan = 9 * cellSize;
+
+            for (int i = 0; i <= 3; ++i) {
+                int offset = margin + i * (3 * cellSize);
+                MoveToEx(memDC, margin, offset, NULL);
+                LineTo(memDC, margin + gridSpan, offset);
+                MoveToEx(memDC, offset, margin, NULL);
+                LineTo(memDC, offset, margin + gridSpan);
+            }
+            SelectObject(memDC, oldThickPen);
+            DeleteObject(hThickPen);
+        }
+
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBmp);
+        DeleteObject(memBmp);
+        DeleteDC(memDC);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_MOUSEMOVE: {
+        if (ctx) {
+            TRACKMOUSEEVENT tme = {};
+            tme.cbSize = sizeof(tme);
+            tme.dwFlags = TME_LEAVE;
+            tme.hwndTrack = hwnd;
+            TrackMouseEvent(&tme);
+
+            int x = LOWORD(lParam);
+            int y = HIWORD(lParam);
+            int margin = 10;
+            int cellSize = 36;
+            int c = (x - margin) / cellSize;
+            int r = (y - margin) / cellSize;
+            int newHover = -1;
+            if (c >= 0 && c < 9 && r >= 0 && r < 9 && x >= margin && y >= margin &&
+                x < margin + 9 * cellSize && y < margin + 9 * cellSize) {
+                newHover = r * 9 + c;
+            }
+            if (newHover != ctx->hoveredCell) {
+                ctx->hoveredCell = newHover;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+    case WM_MOUSELEAVE: {
+        if (ctx && ctx->hoveredCell != -1) {
+            ctx->hoveredCell = -1;
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+    }
+    case WM_LBUTTONDOWN: {
+        if (ctx) {
+            int x = LOWORD(lParam);
+            int y = HIWORD(lParam);
+            int margin = 10;
+            int cellSize = 36;
+            int c = (x - margin) / cellSize;
+            int r = (y - margin) / cellSize;
+            if (c >= 0 && c < 9 && r >= 0 && r < 9 && x >= margin && y >= margin &&
+                x < margin + 9 * cellSize && y < margin + 9 * cellSize) {
+                int cell = r * 9 + c;
+                bool targetSet = !ctx->patternMask.test(cell);
+                auto orbit = hodoku::core::SudokuGenerator::get_symmetric_cells(cell, ctx->currentSymmetry);
+                for (int symCell : orbit) {
+                    if (targetSet) ctx->patternMask.set(symCell);
+                    else ctx->patternMask.reset(symCell);
+                }
+                ctx->cachedPuzzle.reset();
+                UpdatePatternGivensLabel(ctx);
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
+        return 0;
+    }
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+inline LRESULT CALLBACK PatternDesignerDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    PatternDesignerDlgContext* ctx = reinterpret_cast<PatternDesignerDlgContext*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
+    switch (msg) {
+    case WM_COMMAND: {
+        int id = LOWORD(wParam);
+        int code = HIWORD(wParam);
+        if (!ctx) break;
+
+        if (id == IDC_PATTERN_SYMMETRY_COMBO && code == CBN_SELCHANGE) {
+            int sel = (int)SendMessageW(ctx->hComboSymmetry, CB_GETCURSEL, 0, 0);
+            if (sel >= 0 && sel <= 6) {
+                const hodoku::core::SymmetryType symms[] = {
+                    hodoku::core::SymmetryType::None,
+                    hodoku::core::SymmetryType::Rotational180,
+                    hodoku::core::SymmetryType::Rotational90,
+                    hodoku::core::SymmetryType::Horizontal,
+                    hodoku::core::SymmetryType::Vertical,
+                    hodoku::core::SymmetryType::Diagonal,
+                    hodoku::core::SymmetryType::AntiDiagonal
+                };
+                ctx->currentSymmetry = symms[sel];
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_PRESETS_COMBO && code == CBN_SELCHANGE) {
+            int sel = (int)SendMessageW(ctx->hComboPresets, CB_GETCURSEL, 0, 0);
+            if (sel == 1) ctx->patternMask = hodoku::core::SudokuGenerator::make_preset_diamond();
+            else if (sel == 2) ctx->patternMask = hodoku::core::SudokuGenerator::make_preset_cross();
+            else if (sel == 3) ctx->patternMask = hodoku::core::SudokuGenerator::make_preset_picture_frame();
+            else if (sel == 4) ctx->patternMask = hodoku::core::SudokuGenerator::make_preset_checkerboard();
+            else if (sel == 5) {
+                hodoku::core::SudokuGenerator gen;
+                ctx->patternMask = gen.make_preset_random_symmetric(28, ctx->currentSymmetry);
+            } else if (sel == 6) {
+                hodoku::core::SudokuGenerator gen;
+                ctx->patternMask = gen.make_preset_random_symmetric(32, ctx->currentSymmetry);
+            }
+            if (sel > 0) {
+                ctx->cachedPuzzle.reset();
+                UpdatePatternGivensLabel(ctx);
+                InvalidateRect(ctx->hCanvas, NULL, FALSE);
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_CLEAR_BTN) {
+            ctx->patternMask.clear();
+            ctx->cachedPuzzle.reset();
+            UpdatePatternGivensLabel(ctx);
+            InvalidateRect(ctx->hCanvas, NULL, FALSE);
+            return 0;
+        } else if (id == IDC_PATTERN_INVERT_BTN) {
+            ctx->patternMask = ~ctx->patternMask;
+            ctx->cachedPuzzle.reset();
+            UpdatePatternGivensLabel(ctx);
+            InvalidateRect(ctx->hCanvas, NULL, FALSE);
+            return 0;
+        } else if (id == IDC_PATTERN_COPY_BTN) {
+            std::string s;
+            s.reserve(hodoku::core::TOTAL_CELLS);
+            for (int i = 0; i < hodoku::core::TOTAL_CELLS; ++i) {
+                s += ctx->patternMask.test(i) ? '1' : '0';
+            }
+            SetClipboardText(hwnd, s);
+            if (ctx->hLblStatus) {
+                SetWindowTextW(ctx->hLblStatus, L"Pattern mask copied to clipboard (81-character binary string).");
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_PASTE_BTN) {
+            std::string clip = GetClipboardText(hwnd);
+            int count = 0;
+            hodoku::core::BitSet81 newMask;
+            for (char ch : clip) {
+                if (count >= hodoku::core::TOTAL_CELLS) break;
+                if (ch == '1' || ch == 'X' || ch == 'x' || (ch >= '2' && ch <= '9')) {
+                    newMask.set(count++);
+                } else if (ch == '0' || ch == '.' || ch == '_' || ch == '-') {
+                    count++;
+                }
+            }
+            if (count == hodoku::core::TOTAL_CELLS) {
+                ctx->patternMask = newMask;
+                ctx->cachedPuzzle.reset();
+                UpdatePatternGivensLabel(ctx);
+                InvalidateRect(ctx->hCanvas, NULL, FALSE);
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Pattern successfully imported from clipboard.");
+                }
+            } else {
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Clipboard text did not contain 81 recognizable cell values.");
+                }
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_RANDOM_BTN) {
+            hodoku::core::SudokuGenerator gen;
+            ctx->patternMask = gen.make_preset_random_symmetric(28, ctx->currentSymmetry);
+            ctx->cachedPuzzle.reset();
+            UpdatePatternGivensLabel(ctx);
+            InvalidateRect(ctx->hCanvas, NULL, FALSE);
+            if (ctx->hLblStatus) {
+                SetWindowTextW(ctx->hLblStatus, L"Generated random symmetric pattern (28 clues).");
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_CHECK_BTN) {
+            if (ctx->patternMask.count() < 17) {
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Invalid: Minimum 17 clues required. Uniqueness is impossible.");
+                }
+                return 0;
+            }
+            SetCursor(LoadCursor(NULL, IDC_WAIT));
+            if (ctx->hLblStatus) {
+                SetWindowTextW(ctx->hLblStatus, L"Checking pattern validity (searching for unique puzzle)...");
+                UpdateWindow(ctx->hLblStatus);
+            }
+            hodoku::core::SudokuGenerator gen;
+            auto puz = gen.generate_pattern_puzzle(ctx->patternMask, 500);
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+            if (puz.has_value()) {
+                ctx->cachedPuzzle = puz;
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Pattern is VALID! Unique Sudoku puzzle found.");
+                }
+            } else {
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Pattern test inconclusive or over-constrained after 500 attempts.");
+                }
+            }
+            return 0;
+        } else if (id == IDC_PATTERN_GENERATE_BTN || id == IDOK) {
+            if (ctx->patternMask.count() < 17) {
+                MessageBoxW(hwnd, L"The pattern must contain at least 17 givens to produce a unique Sudoku.", L"Invalid Pattern", MB_OK | MB_ICONWARNING);
+                return 0;
+            }
+            hodoku::core::BoardState target;
+            if (ctx->cachedPuzzle.has_value()) {
+                target = *ctx->cachedPuzzle;
+            } else {
+                SetCursor(LoadCursor(NULL, IDC_WAIT));
+                if (ctx->hLblStatus) {
+                    SetWindowTextW(ctx->hLblStatus, L"Digging clues to match exact pattern (up to 3000 attempts)...");
+                    UpdateWindow(ctx->hLblStatus);
+                }
+                hodoku::core::SudokuGenerator gen;
+                auto puz = gen.generate_pattern_puzzle(ctx->patternMask, 3000);
+                SetCursor(LoadCursor(NULL, IDC_ARROW));
+                if (!puz.has_value()) {
+                    MessageBoxW(hwnd, L"Could not generate a unique Sudoku with this exact clue pattern within 3000 attempts.\n\nTip: Try adding a few more clues or choosing a symmetric preset.", L"Pattern Digging Timed Out", MB_OK | MB_ICONINFORMATION);
+                    return 0;
+                }
+                target = *puz;
+            }
+
+            ctx->studio->load_puzzle(target);
+            if (g_onPuzzleStateChanged) g_onPuzzleStateChanged();
+            InvalidateRect(ctx->hOwner, NULL, FALSE);
+            DestroyWindow(hwnd);
+            return 0;
+        } else if (id == IDCANCEL || id == 2) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    case WM_DESTROY: {
+        HWND hOwner = GetWindow(hwnd, GW_OWNER);
+        if (hOwner) {
+            EnableWindow(hOwner, TRUE);
+            SetForegroundWindow(hOwner);
+        }
+        delete ctx;
+        return 0;
+    }
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+inline void ShowPatternDesignerDialog(HWND hParent, HoDoKuStudio& studio) {
+    HINSTANCE hInst = GetModuleHandle(NULL);
+    const wchar_t CANVAS_CLASS[] = L"HoDoKuPatternCanvasClass";
+    const wchar_t DLG_CLASS[] = L"HoDoKuPatternDesignerClass";
+
+    static bool canvasRegistered = false;
+    if (!canvasRegistered) {
+        WNDCLASSEXW cwc = {};
+        cwc.cbSize = sizeof(WNDCLASSEXW);
+        cwc.lpfnWndProc = PatternCanvasWndProc;
+        cwc.hInstance = hInst;
+        cwc.hCursor = LoadCursor(NULL, IDC_CROSS);
+        cwc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+        cwc.lpszClassName = CANVAS_CLASS;
+        RegisterClassExW(&cwc);
+        canvasRegistered = true;
+    }
+
+    static bool dlgRegistered = false;
+    if (!dlgRegistered) {
+        WNDCLASSEXW dwc = {};
+        dwc.cbSize = sizeof(WNDCLASSEXW);
+        dwc.lpfnWndProc = PatternDesignerDlgProc;
+        dwc.hInstance = hInst;
+        dwc.hCursor = LoadCursor(NULL, IDC_ARROW);
+        dwc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+        dwc.lpszClassName = DLG_CLASS;
+        RegisterClassExW(&dwc);
+        dlgRegistered = true;
+    }
+
+    RECT rcParent;
+    GetWindowRect(hParent, &rcParent);
+    int dw = 680, dh = 480;
+    int dx = rcParent.left + (rcParent.right - rcParent.left - dw) / 2;
+    int dy = rcParent.top + (rcParent.bottom - rcParent.top - dh) / 2;
+
+    HWND hDlg = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_TOPMOST,
+        DLG_CLASS,
+        L"Custom Pattern Designer & Clue Digger - HoDoKu",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        dx, dy, dw, dh,
+        hParent, NULL, hInst, NULL
+    );
+    if (!hDlg) return;
+    EnableWindow(hParent, FALSE);
+
+    PatternDesignerDlgContext* ctx = new PatternDesignerDlgContext();
+    ctx->studio = &studio;
+    ctx->hDlg = hDlg;
+    ctx->hOwner = hParent;
+
+    if (studio.get_board().get_givens().count() >= 17) {
+        ctx->patternMask = studio.get_board().get_givens();
+    } else {
+        ctx->patternMask = hodoku::core::SudokuGenerator::make_preset_diamond();
+    }
+
+    SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
+
+    HFONT hFont = GetHoDoKuDialogFont();
+    HFONT hBoldFont = CreateFontW(-12, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+
+    // Left Side: Interactive Canvas
+    ctx->hCanvas = CreateWindowExW(
+        WS_EX_CLIENTEDGE,
+        CANVAS_CLASS,
+        L"",
+        WS_CHILD | WS_VISIBLE,
+        18, 16, 344, 344,
+        hDlg, (HMENU)IDC_PATTERN_CANVAS, hInst, NULL
+    );
+    SetWindowLongPtrW(ctx->hCanvas, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
+
+    ctx->hLblGivens = CreateWindowW(L"STATIC", L"Givens: 0 / 81",
+                                   WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                   18, 368, 344, 20, hDlg, (HMENU)IDC_PATTERN_GIVENS_LBL, hInst, NULL);
+    SendMessage(ctx->hLblGivens, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
+
+    HWND hLblSymm = CreateWindowW(L"STATIC", L"Symmetry:",
+                                 WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                 18, 398, 68, 20, hDlg, NULL, hInst, NULL);
+    SendMessage(hLblSymm, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hComboSymmetry = CreateWindowW(L"COMBOBOX", L"",
+                                        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                        90, 395, 272, 200, hDlg, (HMENU)IDC_PATTERN_SYMMETRY_COMBO, hInst, NULL);
+    SendMessage(ctx->hComboSymmetry, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"None (Freehand)");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"180° Rotational (Standard)");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"90° Rotational (4-Fold)");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"Horizontal Mirror");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"Vertical Mirror");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"Diagonal Mirror");
+    SendMessageW(ctx->hComboSymmetry, CB_ADDSTRING, 0, (LPARAM)L"Anti-Diagonal Mirror");
+    SendMessageW(ctx->hComboSymmetry, CB_SETCURSEL, 1, 0); // Default to 180° Rotational
+
+    // Right Side: Presets & Tools Group
+    HWND hGrpPresets = CreateWindowW(L"BUTTON", L"Pattern Presets & Editing",
+                                     WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                     380, 10, 272, 176, hDlg, NULL, hInst, NULL);
+    SendMessage(hGrpPresets, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hComboPresets = CreateWindowW(L"COMBOBOX", L"",
+                                       WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
+                                       394, 34, 244, 180, hDlg, (HMENU)IDC_PATTERN_PRESETS_COMBO, hInst, NULL);
+    SendMessage(ctx->hComboPresets, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"-- Select Preset Shape --");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Diamond (25 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Cross / Plus (25 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Picture Frame (29 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Checkerboard (25 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Random 180° (28 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_ADDSTRING, 0, (LPARAM)L"Preset: Random 180° (32 Clues)");
+    SendMessageW(ctx->hComboPresets, CB_SETCURSEL, 0, 0);
+
+    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear All", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   394, 68, 116, 26, hDlg, (HMENU)IDC_PATTERN_CLEAR_BTN, hInst, NULL);
+    HWND hBtnInvert = CreateWindowW(L"BUTTON", L"Invert Mask", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    522, 68, 116, 26, hDlg, (HMENU)IDC_PATTERN_INVERT_BTN, hInst, NULL);
+    HWND hBtnCopy = CreateWindowW(L"BUTTON", L"Copy Pattern", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                  394, 100, 116, 26, hDlg, (HMENU)IDC_PATTERN_COPY_BTN, hInst, NULL);
+    HWND hBtnPaste = CreateWindowW(L"BUTTON", L"Paste Pattern", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   522, 100, 116, 26, hDlg, (HMENU)IDC_PATTERN_PASTE_BTN, hInst, NULL);
+    HWND hBtnRandom = CreateWindowW(L"BUTTON", L"🎲 Random Symmetric Pattern", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    394, 132, 244, 26, hDlg, (HMENU)IDC_PATTERN_RANDOM_BTN, hInst, NULL);
+
+    SendMessage(hBtnClear, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hBtnInvert, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hBtnCopy, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hBtnPaste, WM_SETFONT, (WPARAM)hFont, TRUE);
+    SendMessage(hBtnRandom, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    // Right Side: Generation & Validation Group
+    HWND hGrpGen = CreateWindowW(L"BUTTON", L"Validation & Puzzle Digging",
+                                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                 380, 196, 272, 224, hDlg, NULL, hInst, NULL);
+    SendMessage(hGrpGen, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    HWND hBtnCheck = CreateWindowW(L"BUTTON", L"✓ Check Pattern Validity", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   394, 220, 244, 28, hDlg, (HMENU)IDC_PATTERN_CHECK_BTN, hInst, NULL);
+    SendMessage(hBtnCheck, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    ctx->hLblStatus = CreateWindowW(L"STATIC",
+                                   L"Click cells to toggle clues. Symmetries toggle counterparts automatically.",
+                                   WS_CHILD | WS_VISIBLE | SS_LEFT,
+                                   394, 254, 244, 52, hDlg, (HMENU)IDC_PATTERN_STATUS_LBL, hInst, NULL);
+    SendMessage(ctx->hLblStatus, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    HWND hBtnGen = CreateWindowW(L"BUTTON", L"⚡ Generate & Play Puzzle", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                 394, 312, 244, 34, hDlg, (HMENU)IDC_PATTERN_GENERATE_BTN, hInst, NULL);
+    HWND hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   394, 354, 244, 26, hDlg, (HMENU)IDCANCEL, hInst, NULL);
+
+    SendMessage(hBtnGen, WM_SETFONT, (WPARAM)hBoldFont, TRUE);
+    SendMessage(hBtnClose, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    UpdatePatternGivensLabel(ctx);
+}
+
 } // namespace hodoku::ui
+
 

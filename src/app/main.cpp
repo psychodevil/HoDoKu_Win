@@ -253,6 +253,10 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowPreferencesDialog(g_hwnd, *g_studio);
             return true;
         }
+        if (wParam == 'G') {
+            ShowPatternDesignerDialog(g_hwnd, *g_studio);
+            return true;
+        }
         if (wParam == 'C') {
             g_studio->toggle_colorku_mode();
             InvalidateRect(g_hwnd, NULL, FALSE);
@@ -942,6 +946,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             ShowBackdoorsDialog(hwnd, *g_studio);
         } else if (id == IDM_FILE_SET_GIVENS) {
             ShowSetGivensDialog(hwnd, *g_studio);
+        } else if (id == IDM_FILE_CUSTOM_PATTERN) {
+            ShowPatternDesignerDialog(hwnd, *g_studio);
         } else if (id == IDM_OPTIONS_PREFERENCES || id == 9201) {
             if (g_studio) ShowPreferencesDialog(hwnd, *g_studio);
         } else if (id == IDM_HELP_ABOUT) {

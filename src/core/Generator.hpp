@@ -8,6 +8,7 @@
 #include <set>
 #include <optional>
 #include <chrono>
+#include <functional>
 
 #include "Types.hpp"
 #include "BoardState.hpp"
@@ -271,6 +272,172 @@ public:
         }
 
         return generate_puzzle(DifficultyLevel::Hard, symmetry, max_attempts);
+    }
+
+    // Returns all cells related to 'cell' under the specified symmetry
+    static std::vector<int> get_symmetric_cells(int cell, SymmetryType symmetry) {
+        int r = cell_row(cell);
+        int c = cell_col(cell);
+        std::set<int> orbit_set;
+        orbit_set.insert(cell);
+
+        switch (symmetry) {
+        case SymmetryType::None:
+            break;
+        case SymmetryType::Rotational180: {
+            orbit_set.insert(cell_index(8 - r, 8 - c));
+            break;
+        }
+        case SymmetryType::Rotational90: {
+            orbit_set.insert(cell_index(c, 8 - r));
+            orbit_set.insert(cell_index(8 - r, 8 - c));
+            orbit_set.insert(cell_index(8 - c, r));
+            break;
+        }
+        case SymmetryType::Horizontal: {
+            orbit_set.insert(cell_index(8 - r, c));
+            break;
+        }
+        case SymmetryType::Vertical: {
+            orbit_set.insert(cell_index(r, 8 - c));
+            break;
+        }
+        case SymmetryType::Diagonal: {
+            orbit_set.insert(cell_index(c, r));
+            break;
+        }
+        case SymmetryType::AntiDiagonal: {
+            orbit_set.insert(cell_index(8 - c, 8 - r));
+            break;
+        }
+        }
+
+        return std::vector<int>(orbit_set.begin(), orbit_set.end());
+    }
+
+    // Preset pattern masks for generator designer
+    static BitSet81 make_preset_diamond() {
+        BitSet81 mask;
+        const int diamond_cells[] = {
+            cell_index(0, 4),
+            cell_index(1, 3), cell_index(1, 4), cell_index(1, 5),
+            cell_index(2, 2), cell_index(2, 4), cell_index(2, 6),
+            cell_index(3, 1), cell_index(3, 4), cell_index(3, 7),
+            cell_index(4, 0), cell_index(4, 2), cell_index(4, 4), cell_index(4, 6), cell_index(4, 8),
+            cell_index(5, 1), cell_index(5, 4), cell_index(5, 7),
+            cell_index(6, 2), cell_index(6, 4), cell_index(6, 6),
+            cell_index(7, 3), cell_index(7, 4), cell_index(7, 5),
+            cell_index(8, 4)
+        };
+        for (int c : diamond_cells) mask.set(c);
+        return mask;
+    }
+
+    static BitSet81 make_preset_cross() {
+        BitSet81 mask;
+        for (int i = 0; i < 9; ++i) {
+            mask.set(cell_index(4, i)); // Middle row
+            mask.set(cell_index(i, 4)); // Middle column
+        }
+        mask.set(cell_index(1, 1)); mask.set(cell_index(1, 7));
+        mask.set(cell_index(7, 1)); mask.set(cell_index(7, 7));
+        mask.set(cell_index(0, 0)); mask.set(cell_index(0, 8));
+        mask.set(cell_index(8, 0)); mask.set(cell_index(8, 8));
+        return mask;
+    }
+
+    static BitSet81 make_preset_picture_frame() {
+        BitSet81 mask;
+        for (int i = 1; i <= 7; ++i) {
+            if (i == 4) continue;
+            mask.set(cell_index(0, i));
+            mask.set(cell_index(8, i));
+            mask.set(cell_index(i, 0));
+            mask.set(cell_index(i, 8));
+        }
+        mask.set(cell_index(3, 3)); mask.set(cell_index(3, 5));
+        mask.set(cell_index(4, 4));
+        mask.set(cell_index(5, 3)); mask.set(cell_index(5, 5));
+        return mask;
+    }
+
+    static BitSet81 make_preset_checkerboard() {
+        BitSet81 mask;
+        for (int r = 0; r < 9; ++r) {
+            for (int c = 0; c < 9; ++c) {
+                if ((r + c) % 2 == 0 && (r % 2 == 0)) {
+                    mask.set(cell_index(r, c));
+                }
+            }
+        }
+        mask.set(cell_index(4, 4));
+        return mask;
+    }
+
+    BitSet81 make_preset_random_symmetric(int target_clues, SymmetryType symm) {
+        auto orbits = compute_orbits(symm);
+        std::shuffle(orbits.begin(), orbits.end(), m_rng);
+
+        BitSet81 mask;
+        int curClues = 0;
+        for (const auto& orbit : orbits) {
+            if (curClues + static_cast<int>(orbit.size()) <= target_clues) {
+                for (int cell : orbit) {
+                    mask.set(cell);
+                }
+                curClues += static_cast<int>(orbit.size());
+            }
+            if (curClues >= target_clues) break;
+        }
+        return mask;
+    }
+
+    // Digs clues from full_board matching pattern_mask.
+    // Retains clues ONLY on cells where pattern_mask.test(cell) is true.
+    // Returns the board if it has a unique solution, otherwise std::nullopt.
+    std::optional<BoardState> dig_pattern(const BoardState& full_board, const BitSet81& pattern_mask) {
+        if (pattern_mask.count() < 17) {
+            return std::nullopt;
+        }
+
+        std::string s;
+        s.reserve(TOTAL_CELLS);
+        for (int i = 0; i < TOTAL_CELLS; ++i) {
+            if (pattern_mask.test(i)) {
+                s += static_cast<char>('0' + full_board.get_value(i));
+            } else {
+                s += '.';
+            }
+        }
+
+        BoardState test_board(s);
+        DlxSolver dlx;
+        if (dlx.count_solutions(test_board, 2) == 1) {
+            return test_board;
+        }
+        return std::nullopt;
+    }
+
+    // Generates a random puzzle whose clues strictly match pattern_mask.
+    // Tries up to max_attempts random terminal grids.
+    std::optional<BoardState> generate_pattern_puzzle(const BitSet81& pattern_mask, int max_attempts = 1000, std::function<bool(int)> progress_cb = nullptr) {
+        if (pattern_mask.count() < 17) {
+            return std::nullopt;
+        }
+
+        for (int attempt = 0; attempt < max_attempts; ++attempt) {
+            if (progress_cb && !progress_cb(attempt)) {
+                return std::nullopt;
+            }
+
+            BoardState full = generate_terminal_grid();
+            auto puzzle = dig_pattern(full, pattern_mask);
+            if (puzzle.has_value()) {
+                return puzzle;
+            }
+        }
+
+        return std::nullopt;
     }
 
 private:

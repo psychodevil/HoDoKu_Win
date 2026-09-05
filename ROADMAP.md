@@ -1,4 +1,4 @@
-# Overall Project Progress: 97% (76 completed / 78 total tasks)
+# Overall Project Progress: 98% (77 completed / 78 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -274,5 +274,5 @@ High-level architectural objective: Provide interactive tutor validation, CLI au
   - Extend printer engine to support 2, 4, or 6 puzzles per page for printable Sudoku booklet generation.
   - **Definition of Done:** Generator produces valid unique puzzles strictly adhering to the selected clue pattern; printer DC formats multi-grid pages cleanly.
 - **Granular Checklist:**
-  - [ ] Implement custom pattern designer enabling users to specify exact given cell positions for generator digging.
+  - [x] Implement custom pattern designer enabling users to specify exact given cell positions for generator digging.
   - [ ] Add multi-puzzle print layout options (2, 4, or 6 puzzles per page) for printable Sudoku booklets.

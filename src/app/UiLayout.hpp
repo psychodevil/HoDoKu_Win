@@ -938,6 +938,7 @@ inline HMENU CreateHoDoKuMenuBar() {
     // File Menu
     HMENU hFile = CreatePopupMenu();
     AppendMenuW(hFile, MF_STRING, IDM_FILE_NEW, L"&New Random Sudoku\tCtrl+N");
+    AppendMenuW(hFile, MF_STRING, IDM_FILE_CUSTOM_PATTERN, L"&Custom Pattern Generator...\tCtrl+Shift+G");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_OPEN, L"&Open...\tCtrl+O");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE, L"&Save\tCtrl+S");
     AppendMenuW(hFile, MF_STRING, IDM_FILE_SAVE_AS, L"Save &As...\tShift+S");
