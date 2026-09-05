@@ -413,8 +413,22 @@ public:
                 get_candidate_snap_point(link.from_cell, link.from_digit, x1, y1);
                 get_candidate_snap_point(link.to_cell, link.to_digit, x2, y2);
 
-                Pen& p = link.is_strong ? userStrongPen : userWeakPen;
-                draw_directed_link(g, x1, y1, x2, y2, fromCand, toCand, candHeight, p);
+                if (link.color_index >= 0 && link.color_index < 10) {
+                    Color base = HODOKU_PALETTE[link.color_index];
+                    BYTE cr = static_cast<BYTE>(base.GetR() * 0.65f);
+                    BYTE cg = static_cast<BYTE>(base.GetG() * 0.65f);
+                    BYTE cb = static_cast<BYTE>(base.GetB() * 0.65f);
+                    Color customCol(250, cr, cg, cb);
+                    Pen customPen(customCol, link.is_strong ? 2.4f : 2.0f);
+                    if (!link.is_strong) {
+                        customPen.SetDashStyle(DashStyleDash);
+                    }
+                    customPen.SetCustomEndCap(&arrowCap);
+                    draw_directed_link(g, x1, y1, x2, y2, fromCand, toCand, candHeight, customPen);
+                } else {
+                    Pen& p = link.is_strong ? userStrongPen : userWeakPen;
+                    draw_directed_link(g, x1, y1, x2, y2, fromCand, toCand, candHeight, p);
+                }
             }
 
             // Live preview arrow while actively drawing a link
@@ -429,9 +443,19 @@ public:
                     get_candidate_snap_point(startCell, startDigit, x1, y1);
                     get_candidate_snap_point(hoverCell, hoverDigit, x2, y2);
 
-                    Color previewColor = studio.is_drawing_strong_link()
-                        ? Color(180, 37, 99, 235)
-                        : Color(180, 234, 88, 12);
+                    int actCol = studio.get_active_color_index();
+                    Color previewColor;
+                    if (actCol >= 0 && actCol < 10) {
+                        Color base = HODOKU_PALETTE[actCol];
+                        BYTE cr = static_cast<BYTE>(base.GetR() * 0.65f);
+                        BYTE cg = static_cast<BYTE>(base.GetG() * 0.65f);
+                        BYTE cb = static_cast<BYTE>(base.GetB() * 0.65f);
+                        previewColor = Color(200, cr, cg, cb);
+                    } else {
+                        previewColor = studio.is_drawing_strong_link()
+                            ? Color(180, 37, 99, 235)
+                            : Color(180, 234, 88, 12);
+                    }
                     Pen previewPen(previewColor, 2.0f);
                     previewPen.SetDashStyle(DashStyleDash);
                     previewPen.SetCustomEndCap(&arrowCap);

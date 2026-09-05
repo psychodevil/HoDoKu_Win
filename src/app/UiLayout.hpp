@@ -344,12 +344,14 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
 
     if (studio.is_link_mode()) {
         std::wstring linkKind = studio.is_drawing_strong_link() ? L"Strong Link (Solid)" : L"Weak Link (Dashed)";
+        int activeCol = studio.get_active_color_index();
+        std::wstring colStr = (activeCol >= 0 && activeCol < 10) ? (L" | Color: #" + std::to_wstring(activeCol + 1)) : L"";
         if (studio.has_link_start()) {
             int sr = cell_row(studio.get_link_start_cell()) + 1;
             int sc = cell_col(studio.get_link_start_cell()) + 1;
-            part1 = L" [Link Mode: " + linkKind + L"] Start: r" + std::to_wstring(sr) + L"c" + std::to_wstring(sc) + L":" + std::to_wstring(studio.get_link_start_digit()) + L" -> Click target candidate (Esc/Right-Click cancels)";
+            part1 = L" [Link Mode: " + linkKind + colStr + L"] Start: r" + std::to_wstring(sr) + L"c" + std::to_wstring(sc) + L":" + std::to_wstring(studio.get_link_start_digit()) + L" -> Click target candidate (Esc/Right-Click cancels)";
         } else {
-            part1 = L" [Link Mode: " + linkKind + L"] Click candidate to start link (Shift+K: toggle type, Shift+L: exit)";
+            part1 = L" [Link Mode: " + linkKind + colStr + L"] Click candidate to start link (Shift+K: toggle type, Shift+L: exit)";
         }
     } else if (!studio.get_selected_cells().empty() && hCell < 0) {
         int count = studio.get_selected_cells().count();

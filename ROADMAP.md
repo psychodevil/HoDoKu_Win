@@ -1,4 +1,4 @@
-# Overall Project Progress: 92% (72 completed / 78 total tasks)
+# Overall Project Progress: 94% (73 completed / 78 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -254,7 +254,7 @@ High-level architectural objective: Provide interactive tutor validation, CLI au
 - **Granular Checklist:**
   - [x] Implement manual link creation mode allowing users to draw strong and weak inference links between candidates.
   - [x] Add directed arrow vector rendering (solid for strong links, dashed for weak links) across cells with candidate snap points.
-  - [ ] Support custom coloring of drawn link paths and persistence into `.hsol` solution files.
+  - [x] Support custom coloring of drawn link paths and persistence into `.hsol` solution files.
 
 ### Implementation Plan 6.4: Step-by-Step Auto-Play Solving Animation
 - **Planned Impact:** 3%

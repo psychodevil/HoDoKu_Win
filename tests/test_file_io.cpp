@@ -42,6 +42,10 @@ int main() {
 
     // 3. Test HoDoKu Solution (HSOL) export and reload
     studio.set_cell_color(0, 3);
+    studio.set_candidate_color(5, 7, 2);
+    studio.add_user_link(ManualLink{0, 1, 1, 2, true, 4});
+    studio.add_user_link(ManualLink{10, 4, 20, 8, false, 7});
+
     ok = FileManager::save_file(tmpHsol, studio, FileFormat::HoDoKuSolution, err);
     assert(ok);
     HoDoKuStudio studioHsol;
@@ -49,7 +53,17 @@ int main() {
     assert(ok);
     assert(studioHsol.export_givens_string() == studio.export_givens_string());
     assert(studioHsol.get_cell_color(0) == 3);
-    std::cout << "  -> HoDoKu Solution (HSOL) format save/load: PASSED\n";
+    assert(studioHsol.get_candidate_color(5, 7) == 2);
+    assert(studioHsol.get_user_links().size() == 2);
+    assert(studioHsol.get_user_links()[0].from_cell == 0 && studioHsol.get_user_links()[0].from_digit == 1);
+    assert(studioHsol.get_user_links()[0].to_cell == 1 && studioHsol.get_user_links()[0].to_digit == 2);
+    assert(studioHsol.get_user_links()[0].is_strong == true);
+    assert(studioHsol.get_user_links()[0].color_index == 4);
+    assert(studioHsol.get_user_links()[1].from_cell == 10 && studioHsol.get_user_links()[1].from_digit == 4);
+    assert(studioHsol.get_user_links()[1].to_cell == 20 && studioHsol.get_user_links()[1].to_digit == 8);
+    assert(studioHsol.get_user_links()[1].is_strong == false);
+    assert(studioHsol.get_user_links()[1].color_index == 7);
+    std::cout << "  -> HoDoKu Solution (HSOL) format save/load with custom colored links: PASSED\n";
 
     // Clean up temporary files
     std::filesystem::remove_all("test_tmp");

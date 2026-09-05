@@ -1035,26 +1035,30 @@ public:
 
         push_undo();
 
-        ManualLink newLink{m_linkStartCell, m_linkStartDigit, to_cell, to_digit, m_drawStrongLinks};
+        int8_t linkCol = (m_activeColorIndex >= 0 && m_activeColorIndex < 10) ? static_cast<int8_t>(m_activeColorIndex) : COLOR_NONE;
+        ManualLink newLink{m_linkStartCell, m_linkStartDigit, to_cell, to_digit, m_drawStrongLinks, linkCol};
 
-        auto it = std::find(m_userLinks.begin(), m_userLinks.end(), newLink);
+        auto it = std::find_if(m_userLinks.begin(), m_userLinks.end(), [&](const ManualLink& l) {
+            return (l.from_cell == m_linkStartCell && l.from_digit == m_linkStartDigit &&
+                    l.to_cell == to_cell && l.to_digit == to_digit) ||
+                   (l.from_cell == to_cell && l.from_digit == to_digit &&
+                    l.to_cell == m_linkStartCell && l.to_digit == m_linkStartDigit);
+        });
+
         if (it != m_userLinks.end()) {
-            m_userLinks.erase(it);
+            if (it->is_strong == m_drawStrongLinks && it->color_index == linkCol) {
+                // Clicking identical link toggles it off
+                m_userLinks.erase(it);
+            } else {
+                it->from_cell = m_linkStartCell;
+                it->from_digit = m_linkStartDigit;
+                it->to_cell = to_cell;
+                it->to_digit = to_digit;
+                it->is_strong = m_drawStrongLinks;
+                it->color_index = linkCol;
+            }
         } else {
-            bool replaced = false;
-            for (auto& l : m_userLinks) {
-                if ((l.from_cell == m_linkStartCell && l.from_digit == m_linkStartDigit &&
-                     l.to_cell == to_cell && l.to_digit == to_digit) ||
-                    (l.from_cell == to_cell && l.from_digit == to_digit &&
-                     l.to_cell == m_linkStartCell && l.to_digit == m_linkStartDigit)) {
-                    l.is_strong = m_drawStrongLinks;
-                    replaced = true;
-                    break;
-                }
-            }
-            if (!replaced) {
-                m_userLinks.push_back(newLink);
-            }
+            m_userLinks.push_back(newLink);
         }
 
         cancel_link_start();
@@ -1070,6 +1074,39 @@ public:
     }
 
     const std::vector<ManualLink>& get_user_links() const noexcept { return m_userLinks; }
+
+    void add_user_link(const ManualLink& link) {
+        auto it = std::find_if(m_userLinks.begin(), m_userLinks.end(), [&](const ManualLink& l) {
+            return (l.from_cell == link.from_cell && l.from_digit == link.from_digit &&
+                    l.to_cell == link.to_cell && l.to_digit == link.to_digit) ||
+                   (l.from_cell == link.to_cell && l.from_digit == link.to_digit &&
+                    l.to_cell == link.from_cell && l.to_digit == link.from_digit);
+        });
+        if (it != m_userLinks.end()) {
+            *it = link;
+        } else {
+            m_userLinks.push_back(link);
+        }
+    }
+
+    void set_user_links(const std::vector<ManualLink>& links) {
+        m_userLinks = links;
+    }
+
+    bool set_link_color(int from_cell, int from_digit, int to_cell, int to_digit, int8_t color_index) {
+        for (auto& l : m_userLinks) {
+            if ((l.from_cell == from_cell && l.from_digit == from_digit &&
+                 l.to_cell == to_cell && l.to_digit == to_digit) ||
+                (l.from_cell == to_cell && l.from_digit == to_digit &&
+                 l.to_cell == from_cell && l.to_digit == from_digit)) {
+                push_undo();
+                l.color_index = color_index;
+                return true;
+            }
+        }
+        return false;
+    }
+
     void clear_user_links() {
         if (!m_userLinks.empty()) {
             push_undo();

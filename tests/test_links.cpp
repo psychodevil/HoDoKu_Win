@@ -127,6 +127,24 @@ int main() {
     }
     std::cout << "[TEST] Candidate snap points geometry... PASSED\n";
 
+    // 10. Custom link coloring and update
+    studio.clear_user_links();
+    studio.set_active_color_index(2); // Select color 2
+    studio.handle_candidate_link_click(c1, 1);
+    studio.handle_candidate_link_click(c2, 2);
+    assert(studio.get_user_links().size() == 1);
+    assert(studio.get_user_links()[0].color_index == 2);
+
+    // Update color of existing link
+    bool colUpdated = studio.set_link_color(c1, 1, c2, 2, 5);
+    assert(colUpdated);
+    assert(studio.get_user_links()[0].color_index == 5);
+    studio.undo();
+    assert(studio.get_user_links()[0].color_index == 2);
+    studio.redo();
+    assert(studio.get_user_links()[0].color_index == 5);
+    std::cout << "[TEST] Custom link coloring and update... PASSED\n";
+
     std::cout << "========================================\n";
     std::cout << " ALL Manual Link Tests PASSED!          \n";
     std::cout << "========================================\n";

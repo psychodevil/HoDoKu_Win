@@ -211,11 +211,12 @@ struct ManualLink {
     int to_cell{0};
     int to_digit{0};
     bool is_strong{true}; // true: strong link (conjugate), false: weak link (conflict)
+    int8_t color_index{COLOR_NONE}; // COLOR_NONE (-1) for default theme color, or 0..9 for custom palette
 
     bool operator==(const ManualLink& o) const noexcept {
         return from_cell == o.from_cell && from_digit == o.from_digit &&
                to_cell == o.to_cell && to_digit == o.to_digit &&
-               is_strong == o.is_strong;
+               is_strong == o.is_strong && color_index == o.color_index;
     }
 };
 

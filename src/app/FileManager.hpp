@@ -205,6 +205,35 @@ public:
         }
         oss << "\r\n";
 
+        // Candidate Colors
+        oss << "CAND_COLORS=";
+        first = true;
+        for (int cell = 0; cell < TOTAL_CELLS; ++cell) {
+            for (int d = 1; d <= 9; ++d) {
+                int8_t col = studio.get_candidate_color(cell, d);
+                if (col >= 0) {
+                    if (!first) oss << ";";
+                    oss << cell << ":" << d << ":" << static_cast<int>(col);
+                    first = false;
+                }
+            }
+        }
+        oss << "\r\n";
+
+        // User Manual Inference Links (Plan 6.3)
+        const auto& links = studio.get_user_links();
+        oss << "USER_LINKS=";
+        first = true;
+        for (const auto& link : links) {
+            if (!first) oss << ";";
+            oss << link.from_cell << "," << link.from_digit << ","
+                << link.to_cell << "," << link.to_digit << ","
+                << (link.is_strong ? 1 : 0) << ","
+                << static_cast<int>(link.color_index);
+            first = false;
+        }
+        oss << "\r\n";
+
         // Solution Path Steps Count
         const auto& path = studio.get_solution_path();
         oss << "STEPS_COUNT=" << path.size() << "\r\n";
@@ -289,6 +318,8 @@ private:
             std::string filled;
             std::string elims;
             std::string cellColors;
+            std::string candColors;
+            std::string userLinks;
 
             while (std::getline(iss, line)) {
                 if (line.starts_with("GIVENS=")) {
@@ -300,6 +331,10 @@ private:
                     elims = line.substr(13);
                 } else if (line.starts_with("CELL_COLORS=")) {
                     cellColors = line.substr(12);
+                } else if (line.starts_with("CAND_COLORS=")) {
+                    candColors = line.substr(12);
+                } else if (line.starts_with("USER_LINKS=")) {
+                    userLinks = line.substr(11);
                 }
             }
 
@@ -350,6 +385,52 @@ private:
                         int cell = std::stoi(item.substr(0, colon));
                         int col = std::stoi(item.substr(colon + 1));
                         studio.set_cell_color(cell, col);
+                    }
+                }
+            }
+
+            // Apply candidate colors
+            if (!candColors.empty()) {
+                std::istringstream cdss(candColors);
+                std::string item;
+                while (std::getline(cdss, item, ';')) {
+                    size_t c1 = item.find(':');
+                    size_t c2 = (c1 != std::string::npos) ? item.find(':', c1 + 1) : std::string::npos;
+                    if (c1 != std::string::npos && c2 != std::string::npos) {
+                        int cell = std::stoi(item.substr(0, c1));
+                        int digit = std::stoi(item.substr(c1 + 1, c2 - c1 - 1));
+                        int col = std::stoi(item.substr(c2 + 1));
+                        studio.set_candidate_color(cell, digit, static_cast<int8_t>(col));
+                    }
+                }
+            }
+
+            // Apply user manual links
+            studio.clear_user_links();
+            if (!userLinks.empty()) {
+                std::istringstream lss(userLinks);
+                std::string item;
+                while (std::getline(lss, item, ';')) {
+                    if (item.empty()) continue;
+                    std::istringstream issLink(item);
+                    std::string fCellStr, fDigitStr, tCellStr, tDigitStr, strongStr, colStr;
+                    if (std::getline(issLink, fCellStr, ',') &&
+                        std::getline(issLink, fDigitStr, ',') &&
+                        std::getline(issLink, tCellStr, ',') &&
+                        std::getline(issLink, tDigitStr, ',') &&
+                        std::getline(issLink, strongStr, ',')) {
+                        ManualLink link;
+                        link.from_cell = std::stoi(fCellStr);
+                        link.from_digit = std::stoi(fDigitStr);
+                        link.to_cell = std::stoi(tCellStr);
+                        link.to_digit = std::stoi(tDigitStr);
+                        link.is_strong = (std::stoi(strongStr) != 0);
+                        if (std::getline(issLink, colStr, ',')) {
+                            link.color_index = static_cast<int8_t>(std::stoi(colStr));
+                        } else {
+                            link.color_index = COLOR_NONE;
+                        }
+                        studio.add_user_link(link);
                     }
                 }
             }
