@@ -147,10 +147,10 @@ public:
                 cellBrush = &invalidCellBrush;
             }
 
-            // Priority 3: Custom user palette coloring (1..9)
-            int userCol = studio.get_cell_color(cell);
+            // Priority 3: Custom user palette coloring (0..9)
+            int8_t userCol = studio.get_cell_color(cell);
             SolidBrush uBrush(Color(255, 255, 255, 255));
-            if (userCol > 0 && userCol < 10) {
+            if (userCol >= 0 && userCol < 10) {
                 uBrush.SetColor(HODOKU_PALETTE[userCol]);
                 cellBrush = &uBrush;
             }
@@ -284,8 +284,8 @@ public:
                             } else if (isFin) {
                                 g.FillEllipse(&hintFinBackBrush, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
                             } else {
-                                int candCol = studio.get_candidate_color(cell, d);
-                                if (candCol > 0 && candCol < 10) {
+                                int8_t candCol = studio.get_candidate_color(cell, d);
+                                if (candCol >= 0 && candCol < 10) {
                                     SolidBrush cBg(HODOKU_PALETTE[candCol]);
                                     g.FillEllipse(&cBg, kx + ovalOffset, ky + ovalOffset, candHeight, candHeight);
                                 }

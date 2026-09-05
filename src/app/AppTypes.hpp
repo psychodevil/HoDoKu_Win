@@ -192,14 +192,20 @@ enum MenuAndControlId {
     IDC_ZOOM_DETAILS = 6050,
     IDC_ZOOM_CAND_STATUS = 6060,
     IDC_ZOOM_CAND_COLOR_BASE = 6061, // 6061..6070 (0..9)
-    IDC_ZOOM_CAND_CLEAR_BTN = 6071
+    IDC_ZOOM_CAND_CLEAR_BTN = 6071,
+
+    // Status Bar Color Palette Controls
+    IDC_STATUS_COLOR_BASE = 6200, // 6200..6209 (Colors 0..9)
+    IDC_STATUS_COLOR_RESET = 6210
 };
+
+constexpr int8_t COLOR_NONE = -1;
 
 // Snapshot for Undo / Redo
 struct StudioSnapshot {
     BoardState board;
-    std::array<uint8_t, TOTAL_CELLS> cellColors;
-    std::array<std::array<uint8_t, 9>, TOTAL_CELLS> candColors;
+    std::array<int8_t, TOTAL_CELLS> cellColors;
+    std::array<std::array<int8_t, 9>, TOTAL_CELLS> candColors;
 };
 
 // Sample puzzles for each HoDoKu level

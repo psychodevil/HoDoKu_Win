@@ -401,12 +401,28 @@ bool ProcessGlobalKeyShortcuts(UINT msg, WPARAM wParam, LPARAM lParam) {
         return true;
     }
 
-    // 6. Cell Coloring by Keystroke: 1..9 (with Alt or Shift) or 'R' to clear
-    if (wParam == 'R' && !isCtrl) {
-        g_studio->clear_all_colors();
-        if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
-        InvalidateRect(g_hwnd, NULL, FALSE);
-        return true;
+    // 6. Cell Coloring by Keystroke: A..E (primary colors) and Shift+A..Shift+E (secondary tints) or 'R' to clear
+    if (!isCtrl && !isAlt) {
+        if (wParam >= 'A' && wParam <= 'E') {
+            int baseCol = static_cast<int>(wParam - 'A') * 2;
+            int colIdx = isShift ? (baseCol + 1) : baseCol;
+            g_studio->set_selected_cell_color(colIdx);
+            g_studio->set_active_color_index(colIdx);
+            for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
+        if (wParam == 'R') {
+            g_studio->clear_all_colors();
+            g_studio->set_active_color_index(-1);
+            for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(g_hwnd, NULL, FALSE);
+            return true;
+        }
     }
 
     return false;
@@ -530,6 +546,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             bool isCtrl = (wParam & MK_CONTROL) != 0;
             bool isShift = (wParam & MK_SHIFT) != 0;
 
+            int activeCol = g_studio->get_active_color_index();
+            if (activeCol >= 0 && !isCtrl && !isShift) {
+                // Interactive mouse painting mode (matching StatusColorPanel.java)
+                int candDigit = g_renderer.hit_test_candidate(x, y, cell);
+                if (candDigit > 0 && !g_studio->is_color_cells_mode()) {
+                    g_studio->set_candidate_color(cell, candDigit, activeCol);
+                } else {
+                    g_studio->set_cell_color(cell, activeCol);
+                    g_studio->set_selected_cell(cell);
+                }
+                if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+                UpdateStatusBarText(*g_studio);
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
             if (isCtrl) {
                 // Ctrl + Click: toggle cell in multi-selection (SudokuPanel.java lines 872-891)
                 if (g_studio->get_selected_cells().empty()) {
@@ -578,10 +610,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             SetFocus(hwnd);
             g_studio->set_selected_cell(cell);
 
-            int candDigit = g_renderer.hit_test_candidate(x, y, cell);
-            if (candDigit > 0 && g_studio->get_board().is_unfilled(cell)) {
-                // Right-click toggles individual candidate on/off
-                g_studio->toggle_cell_candidate(cell, candDigit);
+            if (g_studio->get_active_color_index() >= 0) {
+                // Right-click toggles cell vs candidate coloring mode
+                g_studio->toggle_color_cells_mode();
+            } else {
+                int candDigit = g_renderer.hit_test_candidate(x, y, cell);
+                if (candDigit > 0 && g_studio->get_board().is_unfilled(cell)) {
+                    // Right-click toggles individual candidate on/off
+                    g_studio->toggle_cell_candidate(cell, candDigit);
+                }
             }
 
             if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
@@ -795,7 +832,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 
         if (id == IDC_ZOOM_CLEAR_BTN) {
-            g_studio->set_selected_cell_color(0);
+            g_studio->set_selected_cell_color(COLOR_NONE);
             UpdateActiveCellPanel(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
         }
@@ -817,6 +854,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_studio->set_active_candidate_color(-1);
             UpdateActiveCellPanel(*g_studio);
             InvalidateRect(hwnd, NULL, FALSE);
+        }
+
+        // Status Bar Color Palette Swatches (Colors 0..9)
+        if (id >= IDC_STATUS_COLOR_BASE && id < IDC_STATUS_COLOR_BASE + 10) {
+            int colIdx = id - IDC_STATUS_COLOR_BASE;
+            if (g_studio->get_active_color_index() == colIdx) {
+                g_studio->set_active_color_index(-1);
+            } else {
+                g_studio->set_active_color_index(colIdx);
+                if (g_studio->get_selected_cell() >= 0 && g_studio->is_color_cells_mode()) {
+                    g_studio->set_selected_cell_color(colIdx);
+                }
+            }
+            for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
+        }
+
+        if (id == IDC_STATUS_COLOR_RESET) {
+            g_studio->set_active_color_index(-1);
+            for (HWND b : g_hStatusColorBtns) if (b) InvalidateRect(b, NULL, TRUE);
+            if (g_currentTab == TabView::ActiveCell) UpdateActiveCellPanel(*g_studio);
+            UpdateStatusBarText(*g_studio);
+            InvalidateRect(hwnd, NULL, FALSE);
+            return 0;
         }
 
         return 0;
@@ -963,8 +1027,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int w = pdis->rcItem.right - pdis->rcItem.left;
             int h = pdis->rcItem.bottom - pdis->rcItem.top;
             int sel = g_studio ? g_studio->get_selected_cell() : 0;
-            int col = (sel >= 0 && g_studio) ? g_studio->get_cell_color(sel) : 0;
-            Color c = (col > 0) ? HODOKU_PALETTE[col] : Color(255, 255, 255, 255);
+            int8_t col = (sel >= 0 && g_studio) ? g_studio->get_cell_color(sel) : COLOR_NONE;
+            Color c = (col >= 0 && col < 10) ? HODOKU_PALETTE[col] : Color(255, 255, 255, 255);
             SolidBrush b(c);
             g.FillRectangle(&b, 0, 0, w, h);
             Pen bdr(Color(255, 100, 100, 100), 1.0f);
@@ -977,7 +1041,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int w = pdis->rcItem.right - pdis->rcItem.left;
             int h = pdis->rcItem.bottom - pdis->rcItem.top;
             int col = g_studio ? g_studio->get_active_candidate_color() : -1;
-            Color c = (col >= 0) ? HODOKU_PALETTE[col] : Color(255, 255, 255, 255);
+            Color c = (col >= 0 && col < 10) ? HODOKU_PALETTE[col] : Color(255, 255, 255, 255);
             SolidBrush b(c);
             g.FillRectangle(&b, 0, 0, w, h);
             Pen bdr(Color(255, 100, 100, 100), 1.0f);
@@ -985,7 +1049,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return TRUE;
         }
 
-        // 7. Clear 'R' Buttons
+        // 7. Clear 'R' Buttons in Zoom Panel
         if (id == IDC_ZOOM_CLEAR_BTN || id == IDC_ZOOM_CAND_CLEAR_BTN) {
             int w = pdis->rcItem.right - pdis->rcItem.left;
             int h = pdis->rcItem.bottom - pdis->rcItem.top;
@@ -997,6 +1061,50 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             FontFamily ff(L"Segoe UI");
             Font f(&ff, 11, FontStyleBold, UnitPixel);
             SolidBrush textB(Color(255, 50, 50, 50));
+            StringFormat fmt;
+            fmt.SetAlignment(StringAlignmentCenter);
+            fmt.SetLineAlignment(StringAlignmentCenter);
+            RectF r(0, 0, static_cast<float>(w), static_cast<float>(h));
+            g.DrawString(L"R", -1, &f, r, &fmt, &textB);
+            return TRUE;
+        }
+
+        // 8. Status Bar 10-Color Palette Swatches (Colors 0..9)
+        if (id >= IDC_STATUS_COLOR_BASE && id < IDC_STATUS_COLOR_BASE + 10) {
+            int colIdx = id - IDC_STATUS_COLOR_BASE;
+            SolidBrush b(HODOKU_PALETTE[colIdx]);
+            int w = pdis->rcItem.right - pdis->rcItem.left;
+            int h = pdis->rcItem.bottom - pdis->rcItem.top;
+            g.FillRectangle(&b, 0, 0, w, h);
+
+            bool isActive = (g_studio && g_studio->get_active_color_index() == colIdx);
+            Pen bdr(isActive ? Color(255, 20, 20, 20) : Color(255, 140, 140, 140), isActive ? 2.0f : 1.0f);
+            g.DrawRectangle(&bdr, 0, 0, w - 1, h - 1);
+
+            const wchar_t* letters[10] = { L"a", L"A", L"b", L"B", L"c", L"C", L"d", L"D", L"e", L"E" };
+            FontFamily ff(L"Segoe UI");
+            Font f(&ff, 9, isActive ? FontStyleBold : FontStyleRegular, UnitPixel);
+            SolidBrush textB(Color(255, 40, 40, 40));
+            StringFormat fmt;
+            fmt.SetAlignment(StringAlignmentCenter);
+            fmt.SetLineAlignment(StringAlignmentCenter);
+            RectF r(0, 0, static_cast<float>(w), static_cast<float>(h));
+            g.DrawString(letters[colIdx], -1, &f, r, &fmt, &textB);
+            return TRUE;
+        }
+
+        // 9. Status Bar Reset 'R' Button
+        if (id == IDC_STATUS_COLOR_RESET) {
+            int w = pdis->rcItem.right - pdis->rcItem.left;
+            int h = pdis->rcItem.bottom - pdis->rcItem.top;
+            SolidBrush bgB(Color(255, 240, 240, 240));
+            g.FillRectangle(&bgB, 0, 0, w, h);
+            Pen bdr(Color(255, 150, 150, 150), 1.0f);
+            g.DrawRectangle(&bdr, 0, 0, w - 1, h - 1);
+
+            FontFamily ff(L"Segoe UI");
+            Font f(&ff, 10, FontStyleBold, UnitPixel);
+            SolidBrush textB(Color(255, 60, 60, 60));
             StringFormat fmt;
             fmt.SetAlignment(StringAlignmentCenter);
             fmt.SetLineAlignment(StringAlignmentCenter);

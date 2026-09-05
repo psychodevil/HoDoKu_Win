@@ -13,6 +13,10 @@ inline HWND g_hStatusBar = NULL;
 inline HWND g_hLevelCombo = NULL;
 inline std::vector<HWND> g_toolbarButtons;
 
+// Status Bar Color Palette Swatches
+inline HWND g_hStatusColorBtns[10] = {NULL};
+inline HWND g_hStatusResetBtn = NULL;
+
 // Bottom Hint Panel Controls
 inline HWND g_hHintEdit = NULL;
 inline HWND g_hHintNextBtn = NULL;
@@ -398,6 +402,7 @@ inline void UpdateStatusBarText(const HoDoKuStudio& studio) {
 
     SendMessageW(g_hStatusBar, SB_SETTEXT, 0, (LPARAM)part1.c_str());
     SendMessageW(g_hStatusBar, SB_SETTEXT, 1, (LPARAM)part2.c_str());
+    SendMessageW(g_hStatusBar, SB_SETTEXT, 2, (LPARAM)L"");
 }
 
 inline void LayoutHoDoKuControls(HWND hwnd, int width, int height) {
@@ -467,11 +472,29 @@ inline void LayoutHoDoKuControls(HWND hwnd, int width, int height) {
         }
     }
 
-    // Status Bar
+    // Status Bar with 10-Color Palette Swatches
     if (g_hStatusBar) {
         MoveWindow(g_hStatusBar, 0, height - statusBarH, width, statusBarH, TRUE);
-        int parts[2] = { static_cast<int>(width * 0.55f), -1 };
-        SendMessageW(g_hStatusBar, SB_SETPARTS, 2, (LPARAM)parts);
+        int paletteW = 196;
+        int part0W = (std::max)(120, width - paletteW - 250);
+        int part1W = (std::max)(part0W + 80, width - paletteW - 12);
+        int parts[3] = { part0W, part1W, -1 };
+        SendMessageW(g_hStatusBar, SB_SETPARTS, 3, (LPARAM)parts);
+
+        int bx = width - paletteW + 2;
+        int btnW = 15;
+        int btnH = 15;
+        int by = height - statusBarH + 3;
+        for (int i = 0; i < 10; ++i) {
+            if (g_hStatusColorBtns[i]) {
+                MoveWindow(g_hStatusColorBtns[i], bx, by, btnW, btnH, TRUE);
+                bx += btnW + 2;
+                if (i == 4) bx += 4; // visual gap between 0..4 and 5..9
+            }
+        }
+        if (g_hStatusResetBtn) {
+            MoveWindow(g_hStatusResetBtn, bx + 2, by, 18, btnH, TRUE);
+        }
     }
 }
 
@@ -668,6 +691,14 @@ inline void CreateHoDoKuUI(HWND hwnd) {
     g_hStatusBar = CreateWindowW(STATUSCLASSNAMEW, L"", WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
                                  0, 0, 0, 0, hwnd, NULL, NULL, NULL);
     SendMessage(g_hStatusBar, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+    // Status Bar Color Palette Controls (Matching StatusColorPanel.java)
+    for (int i = 0; i < 10; ++i) {
+        g_hStatusColorBtns[i] = CreateWindowW(L"BUTTON", L"", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                                              0, 0, 15, 15, hwnd, (HMENU)(INT_PTR)(IDC_STATUS_COLOR_BASE + i), NULL, NULL);
+    }
+    g_hStatusResetBtn = CreateWindowW(L"BUTTON", L"R", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                                      0, 0, 18, 15, hwnd, (HMENU)(INT_PTR)IDC_STATUS_COLOR_RESET, NULL, NULL);
 }
 
 inline HMENU CreateHoDoKuMenuBar() {

@@ -15,8 +15,8 @@ namespace hodoku::ui {
 class HoDoKuStudio {
 public:
     HoDoKuStudio() {
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         load_puzzle_by_level(DifficultyLevel::Easy);
         start_background_generator();
     }
@@ -76,8 +76,8 @@ public:
                 m_initialBoard = m_board;
                 m_undoStack.clear();
                 m_redoStack.clear();
-                m_cellColors.fill(0);
-                for (auto& row : m_candidateColors) row.fill(0);
+                m_cellColors.fill(COLOR_NONE);
+                for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
                 m_activeCandidateColor = -1;
                 m_selectedCell = 0;
                 m_selectedStep.reset();
@@ -121,8 +121,8 @@ public:
         m_totalScore = 0;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         m_activeCandidateColor = -1;
         m_undoStack.clear();
         m_redoStack.clear();
@@ -134,8 +134,8 @@ public:
     void reset_puzzle() {
         push_undo();
         m_board = m_initialBoard;
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         m_activeCandidateColor = -1;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
@@ -150,8 +150,8 @@ public:
         m_selectedCell = 0;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         m_activeCandidateColor = -1;
         m_undoStack.clear();
         m_redoStack.clear();
@@ -239,10 +239,10 @@ public:
     void set_cell_color(int cell, int colorIdx) {
         if (cell < 0 || cell >= TOTAL_CELLS) return;
         push_undo();
-        if (m_cellColors[cell] == static_cast<uint8_t>(colorIdx)) {
-            m_cellColors[cell] = 0; // Toggle off if clicked again
+        if (colorIdx < 0 || colorIdx >= 10 || m_cellColors[cell] == static_cast<int8_t>(colorIdx)) {
+            m_cellColors[cell] = COLOR_NONE; // Toggle off if clicked again
         } else {
-            m_cellColors[cell] = static_cast<uint8_t>(colorIdx);
+            m_cellColors[cell] = static_cast<int8_t>(colorIdx);
         }
     }
 
@@ -250,18 +250,18 @@ public:
         if (cell < 0 || cell >= TOTAL_CELLS || digit < 1 || digit > 9) return;
         push_undo();
         int dIdx = digit - 1;
-        if (m_candidateColors[cell][dIdx] == static_cast<uint8_t>(colorIdx)) {
-            m_candidateColors[cell][dIdx] = 0;
+        if (colorIdx < 0 || colorIdx >= 10 || m_candidateColors[cell][dIdx] == static_cast<int8_t>(colorIdx)) {
+            m_candidateColors[cell][dIdx] = COLOR_NONE;
         } else {
-            m_candidateColors[cell][dIdx] = static_cast<uint8_t>(colorIdx);
+            m_candidateColors[cell][dIdx] = static_cast<int8_t>(colorIdx);
         }
     }
 
-    uint8_t get_candidate_color(int cell, int digit) const {
+    int8_t get_candidate_color(int cell, int digit) const {
         if (cell >= 0 && cell < TOTAL_CELLS && digit >= 1 && digit <= 9) {
             return m_candidateColors[cell][digit - 1];
         }
-        return 0;
+        return COLOR_NONE;
     }
 
     int get_active_candidate_color() const { return m_activeCandidateColor; }
@@ -511,10 +511,10 @@ public:
         if (!m_selectedCells.empty()) {
             push_undo();
             m_selectedCells.for_each_cell([&](int cell) {
-                if (colorIdx == 0 || m_cellColors[cell] == static_cast<uint8_t>(colorIdx)) {
-                    m_cellColors[cell] = 0;
+                if (colorIdx < 0 || colorIdx >= 10 || m_cellColors[cell] == static_cast<int8_t>(colorIdx)) {
+                    m_cellColors[cell] = COLOR_NONE;
                 } else {
-                    m_cellColors[cell] = static_cast<uint8_t>(colorIdx);
+                    m_cellColors[cell] = static_cast<int8_t>(colorIdx);
                 }
             });
         } else {
@@ -592,8 +592,8 @@ public:
         m_initialBoard = m_board;
         m_selectedStep.reset();
         m_hintLevel = HintLevel::None;
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         m_activeCandidateColor = -1;
         recalculate_solution_path();
         recalculate_fas();
@@ -648,16 +648,17 @@ public:
 
     void clear_all_colors() {
         push_undo();
-        m_cellColors.fill(0);
-        for (auto& row : m_candidateColors) row.fill(0);
+        m_cellColors.fill(COLOR_NONE);
+        for (auto& row : m_candidateColors) row.fill(COLOR_NONE);
         m_activeCandidateColor = -1;
+        m_activeColorIndex = -1;
     }
 
     struct Savepoint {
         std::string name;
         BoardState board;
-        std::array<uint8_t, TOTAL_CELLS> cellColors{};
-        std::array<std::array<uint8_t, 9>, TOTAL_CELLS> candidateColors{};
+        std::array<int8_t, TOTAL_CELLS> cellColors{};
+        std::array<std::array<int8_t, 9>, TOTAL_CELLS> candidateColors{};
     };
 
     void add_savepoint(std::string name = "") {
@@ -683,6 +684,11 @@ public:
 
     const std::vector<Savepoint>& get_savepoints() const { return m_savepoints; }
     void clear_savepoints() { m_savepoints.clear(); }
+    bool delete_savepoint(size_t index) {
+        if (index >= m_savepoints.size()) return false;
+        m_savepoints.erase(m_savepoints.begin() + index);
+        return true;
+    }
 
     struct BackdoorCandidate {
         int cell;
@@ -764,9 +770,15 @@ public:
     void toggle_colorku_mode() { m_colorKuMode = !m_colorKuMode; }
     void set_colorku_mode(bool val) { m_colorKuMode = val; }
 
-    int get_cell_color(int cell) const {
-        return (cell >= 0 && cell < TOTAL_CELLS) ? m_cellColors[cell] : 0;
+    int8_t get_cell_color(int cell) const {
+        return (cell >= 0 && cell < TOTAL_CELLS) ? m_cellColors[cell] : COLOR_NONE;
     }
+
+    int get_active_color_index() const { return m_activeColorIndex; }
+    void set_active_color_index(int idx) { m_activeColorIndex = idx; }
+    bool is_color_cells_mode() const { return m_colorCellsMode; }
+    void set_color_cells_mode(bool val) { m_colorCellsMode = val; }
+    void toggle_color_cells_mode() { m_colorCellsMode = !m_colorCellsMode; }
 
     const std::vector<TechniqueType>& get_training_techniques() const { return m_trainingTechniques; }
     void set_training_techniques(const std::vector<TechniqueType>& techs) { m_trainingTechniques = techs; }
@@ -787,9 +799,11 @@ private:
 
     std::vector<StudioSnapshot> m_undoStack;
     std::vector<StudioSnapshot> m_redoStack;
-    std::array<uint8_t, TOTAL_CELLS> m_cellColors{};
-    std::array<std::array<uint8_t, 9>, TOTAL_CELLS> m_candidateColors{};
+    std::array<int8_t, TOTAL_CELLS> m_cellColors{};
+    std::array<std::array<int8_t, 9>, TOTAL_CELLS> m_candidateColors{};
     int m_activeCandidateColor{-1};
+    int m_activeColorIndex{-1};
+    bool m_colorCellsMode{true};
 
     std::vector<Step> m_solutionPath;
     std::vector<Step> m_fasSteps;
