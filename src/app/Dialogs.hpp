@@ -17,6 +17,17 @@ inline HWND g_hGivensStatus = NULL;
 
 inline std::function<void()> g_onPuzzleStateChanged = nullptr;
 
+inline HFONT GetHoDoKuDialogFont() {
+    static HFONT s_hFont = NULL;
+    if (!s_hFont) {
+        s_hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                              CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        if (!s_hFont) s_hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    }
+    return s_hFont;
+}
+
 inline void SetClipboardText(HWND hwndOwner, const std::string& text) {
     if (!OpenClipboard(hwndOwner)) return;
     EmptyClipboard();
@@ -116,7 +127,7 @@ inline LRESULT CALLBACK SetGivensDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
     switch (msg) {
     case WM_COMMAND: {
         int id = LOWORD(wParam);
-        if (id == 1) { // Load
+        if (id == IDOK || id == 1) { // Load
             int len = GetWindowTextLengthW(g_hGivensEdit);
             std::vector<wchar_t> buf(len + 1);
             GetWindowTextW(g_hGivensEdit, buf.data(), len + 1);
@@ -133,7 +144,7 @@ inline LRESULT CALLBACK SetGivensDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             }
             DestroyWindow(hwnd);
             return 0;
-        } else if (id == 2) { // Cancel
+        } else if (id == IDCANCEL || id == 2) { // Cancel
             DestroyWindow(hwnd);
             return 0;
         } else if (id == 3) { // Clear
@@ -152,6 +163,18 @@ inline LRESULT CALLBACK SetGivensDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             SetWindowTextW(g_hGivensStatus, st.c_str());
         }
         break;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
     }
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -206,7 +229,7 @@ inline void ShowSetGivensDialog(HWND hParent, HoDoKuStudio& studio) {
     SetWindowLongPtrW(g_hGivensDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&studio));
     EnableWindow(hParent, FALSE);
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
     HFONT hMono = CreateFontW(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                              FIXED_PITCH | FF_MODERN, L"Consolas");
@@ -216,7 +239,7 @@ inline void ShowSetGivensDialog(HWND hParent, HoDoKuStudio& studio) {
     SendMessage(hLbl, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     g_hGivensEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-                                    WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN,
                                     16, 36, 470, 220, g_hGivensDlg, (HMENU)4, hInst, NULL);
     SendMessage(g_hGivensEdit, WM_SETFONT, (WPARAM)hMono, TRUE);
 
@@ -228,12 +251,12 @@ inline void ShowSetGivensDialog(HWND hParent, HoDoKuStudio& studio) {
                                    WS_CHILD | WS_VISIBLE, 16, 266, 470, 20, g_hGivensDlg, NULL, hInst, NULL);
     SendMessage(g_hGivensStatus, WM_SETFONT, (WPARAM)hFont, TRUE);
 
-    HWND hBtnLoad = CreateWindowW(L"BUTTON", L"Load Puzzle", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                                  200, 298, 100, 28, g_hGivensDlg, (HMENU)1, hInst, NULL);
-    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnLoad = CreateWindowW(L"BUTTON", L"Load Puzzle", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                  200, 298, 100, 28, g_hGivensDlg, (HMENU)IDOK, hInst, NULL);
+    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                    310, 298, 80, 28, g_hGivensDlg, (HMENU)3, hInst, NULL);
-    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                    400, 298, 86, 28, g_hGivensDlg, (HMENU)2, hInst, NULL);
+    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    400, 298, 86, 28, g_hGivensDlg, (HMENU)IDCANCEL, hInst, NULL);
 
     SendMessage(hBtnLoad, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hBtnClear, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -255,6 +278,18 @@ inline LRESULT CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
             return 0;
         }
         break;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
     }
     case WM_CLOSE:
         DestroyWindow(hwnd);
@@ -305,7 +340,7 @@ inline void ShowAboutDialog(HWND hParent) {
     if (!hDlg) return;
     EnableWindow(hParent, FALSE);
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
     HFONT hTitleFont = CreateFontW(22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
                                   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                   DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
@@ -344,7 +379,7 @@ inline void ShowAboutDialog(HWND hParent) {
     CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
                   20, 326, 444, 2, hDlg, NULL, hInst, NULL);
 
-    HWND hBtnOk = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+    HWND hBtnOk = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                 200, 340, 90, 28, hDlg, (HMENU)IDOK, hInst, NULL);
     SendMessage(hBtnOk, WM_SETFONT, (WPARAM)hFont, TRUE);
 }
@@ -442,6 +477,18 @@ inline LRESULT CALLBACK SavepointsDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LP
         }
         break;
     }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
@@ -497,14 +544,14 @@ inline void ShowSavepointsDialog(HWND hParent, HoDoKuStudio& studio) {
     ctx->hOwner = hParent;
     SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
 
     HWND hLbl = CreateWindowW(L"STATIC", L"Saved Bookmarks / Savepoints for Current Puzzle:",
                               WS_CHILD | WS_VISIBLE, 16, 12, 400, 20, hDlg, NULL, hInst, NULL);
     SendMessage(hLbl, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-                                 WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
+                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
                                  16, 36, 420, 320, hDlg, (HMENU)500, hInst, NULL);
     SendMessage(ctx->hList, WM_SETFONT, (WPARAM)hFont, TRUE);
     ListView_SetExtendedListViewStyle(ctx->hList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
@@ -532,16 +579,16 @@ inline void ShowSavepointsDialog(HWND hParent, HoDoKuStudio& studio) {
         ListView_SetItemState(ctx->hList, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
     }
 
-    HWND hBtnRestore = CreateWindowW(L"BUTTON", L"Restore", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+    HWND hBtnRestore = CreateWindowW(L"BUTTON", L"Restore", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                     448, 36, 106, 28, hDlg, (HMENU)101, hInst, NULL);
-    HWND hBtnAdd = CreateWindowW(L"BUTTON", L"Add Bookmark", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnAdd = CreateWindowW(L"BUTTON", L"Add Bookmark", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                  448, 72, 106, 28, hDlg, (HMENU)102, hInst, NULL);
-    HWND hBtnDelete = CreateWindowW(L"BUTTON", L"Delete", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnDelete = CreateWindowW(L"BUTTON", L"Delete", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                     448, 108, 106, 28, hDlg, (HMENU)103, hInst, NULL);
-    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear All", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                    448, 144, 106, 28, hDlg, (HMENU)104, hInst, NULL);
-    HWND hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                   448, 328, 106, 28, hDlg, (HMENU)2, hInst, NULL);
+    HWND hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   448, 328, 106, 28, hDlg, (HMENU)IDCANCEL, hInst, NULL);
 
     SendMessage(hBtnRestore, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hBtnAdd, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -653,6 +700,18 @@ inline LRESULT CALLBACK BackdoorsDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
         }
         break;
     }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
@@ -708,7 +767,7 @@ inline void ShowBackdoorsDialog(HWND hParent, HoDoKuStudio& studio) {
     ctx->hOwner = hParent;
     SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
 
     HWND hLbl = CreateWindowW(L"STATIC",
                               L"Level-1 Backdoors: setting any of these cells immediately collapses the puzzle to Singles:",
@@ -716,7 +775,7 @@ inline void ShowBackdoorsDialog(HWND hParent, HoDoKuStudio& studio) {
     SendMessage(hLbl, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
-                                 WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
+                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER,
                                  16, 36, 460, 340, hDlg, (HMENU)500, hInst, NULL);
     SendMessage(ctx->hList, WM_SETFONT, (WPARAM)hFont, TRUE);
     ListView_SetExtendedListViewStyle(ctx->hList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
@@ -748,14 +807,14 @@ inline void ShowBackdoorsDialog(HWND hParent, HoDoKuStudio& studio) {
         ListView_SetItemState(ctx->hList, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
     }
 
-    HWND hBtnApply = CreateWindowW(L"BUTTON", L"Apply to Grid", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+    HWND hBtnApply = CreateWindowW(L"BUTTON", L"Apply to Grid", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                    486, 36, 110, 28, hDlg, (HMENU)101, hInst, NULL);
-    HWND hBtnSelect = CreateWindowW(L"BUTTON", L"Select Cell", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnSelect = CreateWindowW(L"BUTTON", L"Select Cell", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                     486, 72, 110, 28, hDlg, (HMENU)102, hInst, NULL);
-    HWND hBtnRefresh = CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnRefresh = CreateWindowW(L"BUTTON", L"Refresh", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                      486, 108, 110, 28, hDlg, (HMENU)103, hInst, NULL);
-    HWND hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                   486, 348, 110, 28, hDlg, (HMENU)2, hInst, NULL);
+    HWND hBtnClose = CreateWindowW(L"BUTTON", L"Close", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                   486, 348, 110, 28, hDlg, (HMENU)IDCANCEL, hInst, NULL);
 
     SendMessage(hBtnApply, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hBtnSelect, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -870,6 +929,18 @@ inline LRESULT CALLBACK TrainingConfigDlgProc(HWND hwnd, UINT msg, WPARAM wParam
         }
         break;
     }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
@@ -925,7 +996,7 @@ inline void ShowTrainingConfigDialog(HWND hParent, HoDoKuStudio& studio) {
     ctx->hOwner = hParent;
     SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
 
     HWND hLbl = CreateWindowW(L"STATIC",
                               L"Select the technique categories to target during Practice & Training:",
@@ -960,20 +1031,20 @@ inline void ShowTrainingConfigDialog(HWND hParent, HoDoKuStudio& studio) {
     int rowH = 26;
     for (int i = 0; i < 12; ++i) {
         ctx->checkBoxes[i] = CreateWindowW(L"BUTTON", labels[i],
-                                           WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                            22, startY + i * rowH, 500, 22, hDlg, (HMENU)(INT_PTR)(300 + i), hInst, NULL);
         SendMessage(ctx->checkBoxes[i], WM_SETFONT, (WPARAM)hFont, TRUE);
         SendMessage(ctx->checkBoxes[i], BM_SETCHECK, hasTech(ctx->techTypes[i]) ? BST_CHECKED : BST_UNCHECKED, 0);
     }
 
     int btnY = startY + 12 * rowH + 12;
-    HWND hBtnAll = CreateWindowW(L"BUTTON", L"Select All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnAll = CreateWindowW(L"BUTTON", L"Select All", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                  22, btnY, 96, 26, hDlg, (HMENU)201, hInst, NULL);
-    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear All", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnClear = CreateWindowW(L"BUTTON", L"Clear All", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                    124, btnY, 96, 26, hDlg, (HMENU)202, hInst, NULL);
-    HWND hBtnInter = CreateWindowW(L"BUTTON", L"Intermediate", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnInter = CreateWindowW(L"BUTTON", L"Intermediate", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                    226, btnY, 110, 26, hDlg, (HMENU)203, hInst, NULL);
-    HWND hBtnAdv = CreateWindowW(L"BUTTON", L"Advanced", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnAdv = CreateWindowW(L"BUTTON", L"Advanced", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                  342, btnY, 100, 26, hDlg, (HMENU)204, hInst, NULL);
 
     SendMessage(hBtnAll, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -984,12 +1055,12 @@ inline void ShowTrainingConfigDialog(HWND hParent, HoDoKuStudio& studio) {
     CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_ETCHEDHORZ,
                   18, btnY + 36, 510, 2, hDlg, NULL, hInst, NULL);
 
-    HWND hBtnStart = CreateWindowW(L"BUTTON", L"Start Practice", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+    HWND hBtnStart = CreateWindowW(L"BUTTON", L"Start Practice", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                    170, btnY + 46, 120, 28, hDlg, (HMENU)101, hInst, NULL);
-    HWND hBtnSave = CreateWindowW(L"BUTTON", L"Save & Close", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnSave = CreateWindowW(L"BUTTON", L"Save & Close", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                   298, btnY + 46, 110, 28, hDlg, (HMENU)102, hInst, NULL);
-    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                    416, btnY + 46, 96, 28, hDlg, (HMENU)2, hInst, NULL);
+    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    416, btnY + 46, 100, 28, hDlg, (HMENU)IDCANCEL, hInst, NULL);
 
     SendMessage(hBtnStart, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hBtnSave, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -1165,6 +1236,18 @@ inline LRESULT CALLBACK ExportPngDlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
         }
         break;
     }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+    }
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
@@ -1220,7 +1303,7 @@ inline void DoExportPng(HWND hParent, const HoDoKuStudio& studio) {
     ctx->hOwner = hParent;
     SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
 
     HWND hGrp = CreateWindowW(L"BUTTON", L"PNG Image Parameters",
                               WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
@@ -1232,7 +1315,7 @@ inline void DoExportPng(HWND hParent, const HoDoKuStudio& studio) {
     SendMessage(hLblSize, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hEditSize = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"1080",
-                                     WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_AUTOHSCROLL,
+                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_AUTOHSCROLL,
                                      260, 36, 80, 22, hDlg, NULL, hInst, NULL);
     SendMessage(ctx->hEditSize, WM_SETFONT, (WPARAM)hFont, TRUE);
 
@@ -1245,7 +1328,7 @@ inline void DoExportPng(HWND hParent, const HoDoKuStudio& studio) {
     SendMessage(hLblDpi, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hEditDpi = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"300",
-                                    WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_AUTOHSCROLL,
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_AUTOHSCROLL,
                                     260, 66, 80, 22, hDlg, NULL, hInst, NULL);
     SendMessage(ctx->hEditDpi, WM_SETFONT, (WPARAM)hFont, TRUE);
 
@@ -1254,13 +1337,13 @@ inline void DoExportPng(HWND hParent, const HoDoKuStudio& studio) {
     SendMessage(hLblDpiUnit, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hChkCand = CreateWindowW(L"BUTTON", L"Render Candidates (Pencilmarks)",
-                                  WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                   32, 102, 220, 22, hDlg, NULL, hInst, NULL);
     SendMessage(ctx->hChkCand, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(ctx->hChkCand, BM_SETCHECK, BST_CHECKED, 0);
 
     ctx->hChkColors = CreateWindowW(L"BUTTON", L"Render Cell & Candidate Colors",
-                                    WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                     260, 102, 210, 22, hDlg, NULL, hInst, NULL);
     SendMessage(ctx->hChkColors, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(ctx->hChkColors, BM_SETCHECK, BST_CHECKED, 0);
@@ -1271,21 +1354,21 @@ inline void DoExportPng(HWND hParent, const HoDoKuStudio& studio) {
     SendMessage(hGrpPath, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     ctx->hEditPath = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"sudoku_board.png",
-                                     WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                      32, 180, 320, 24, hDlg, NULL, hInst, NULL);
     SendMessage(ctx->hEditPath, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     HWND hBtnBrowse = CreateWindowW(L"BUTTON", L"Browse...",
-                                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                     362, 180, 106, 24, hDlg, (HMENU)103, hInst, NULL);
     SendMessage(hBtnBrowse, WM_SETFONT, (WPARAM)hFont, TRUE);
 
     HWND hBtnExport = CreateWindowW(L"BUTTON", L"Export PNG",
-                                    WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                                    260, 248, 110, 28, hDlg, (HMENU)1, hInst, NULL);
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                    260, 248, 110, 28, hDlg, (HMENU)IDOK, hInst, NULL);
     HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel",
-                                    WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                    378, 248, 106, 28, hDlg, (HMENU)2, hInst, NULL);
+                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    378, 248, 106, 28, hDlg, (HMENU)IDCANCEL, hInst, NULL);
 
     SendMessage(hBtnExport, WM_SETFONT, (WPARAM)hFont, TRUE);
     SendMessage(hBtnCancel, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -1369,6 +1452,18 @@ inline LRESULT CALLBACK PreferencesDlgProc(HWND hwnd, UINT msg, WPARAM wParam, L
             return 0;
         }
         break;
+    }
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORSTATIC: {
+        HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
     }
     case WM_NOTIFY: {
         LPNMHDR pnm = (LPNMHDR)lParam;
@@ -1472,10 +1567,10 @@ inline void ShowPreferencesDialog(HWND hParent, HoDoKuStudio& studio) {
     ctx->hOwner = hParent;
     SetWindowLongPtrW(hDlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
-    HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    HFONT hFont = GetHoDoKuDialogFont();
     AppSettings s = SettingsManager::load();
 
-    ctx->hTab = CreateWindowW(WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+    ctx->hTab = CreateWindowW(WC_TABCONTROLW, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,
                               16, 12, 532, 380, hDlg, (HMENU)600, hInst, NULL);
     SendMessage(ctx->hTab, WM_SETFONT, (WPARAM)hFont, TRUE);
 
@@ -1491,19 +1586,19 @@ inline void ShowPreferencesDialog(HWND hParent, HoDoKuStudio& studio) {
     // Tab 0 Controls
     int ty = 52;
     ctx->hChkShowCand = CreateWindowW(L"BUTTON", L"Show Candidates in unsolved cells",
-                                      WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       36, ty, 460, 24, hDlg, NULL, hInst, NULL);
     ctx->hChkShowDev = CreateWindowW(L"BUTTON", L"Show tutor deviations from unique puzzle solution",
-                                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                      36, ty + 32, 460, 24, hDlg, NULL, hInst, NULL);
     ctx->hChkShowWrong = CreateWindowW(L"BUTTON", L"Show duplicate / rule-violating values in grid",
-                                       WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                        36, ty + 64, 460, 24, hDlg, NULL, hInst, NULL);
     ctx->hChkColorValues = CreateWindowW(L"BUTTON", L"Differentiate givens (black) from user entries (blue)",
-                                         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                         WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                          36, ty + 96, 460, 24, hDlg, NULL, hInst, NULL);
     ctx->hChkColorKu = CreateWindowW(L"BUTTON", L"ColorKu 3D Marble Sphere Mode (Ctrl+Shift+C)",
-                                     WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                      36, ty + 128, 460, 24, hDlg, NULL, hInst, NULL);
 
     SendMessage(ctx->hChkShowCand, WM_SETFONT, (WPARAM)hFont, TRUE);
@@ -1530,9 +1625,9 @@ inline void ShowPreferencesDialog(HWND hParent, HoDoKuStudio& studio) {
 
     // Tab 2 Controls
     ctx->hChkFas = CreateWindowW(L"BUTTON", L"Automatically compute Find All Steps (FAS)",
-                                 WS_CHILD, 36, ty, 460, 24, hDlg, NULL, hInst, NULL);
+                                 WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 36, ty, 460, 24, hDlg, NULL, hInst, NULL);
     ctx->hChkFilterExc = CreateWindowW(L"BUTTON", L"Filter excluded candidates in toolbar digit filters",
-                                       WS_CHILD, 36, ty + 32, 460, 24, hDlg, NULL, hInst, NULL);
+                                       WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX, 36, ty + 32, 460, 24, hDlg, NULL, hInst, NULL);
 
     std::wstring simdText =
         L"Hardware Acceleration & Architecture:\n"
@@ -1553,11 +1648,11 @@ inline void ShowPreferencesDialog(HWND hParent, HoDoKuStudio& studio) {
     ShowPreferencesTab(ctx, 0);
 
     // Bottom buttons
-    HWND hBtnOk = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                                264, 404, 90, 28, hDlg, (HMENU)1, hInst, NULL);
-    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                    362, 404, 90, 28, hDlg, (HMENU)2, hInst, NULL);
-    HWND hBtnApply = CreateWindowW(L"BUTTON", L"Apply", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+    HWND hBtnOk = CreateWindowW(L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                264, 404, 90, 28, hDlg, (HMENU)IDOK, hInst, NULL);
+    HWND hBtnCancel = CreateWindowW(L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                    362, 404, 90, 28, hDlg, (HMENU)IDCANCEL, hInst, NULL);
+    HWND hBtnApply = CreateWindowW(L"BUTTON", L"Apply", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                    460, 404, 88, 28, hDlg, (HMENU)3, hInst, NULL);
 
     SendMessage(hBtnOk, WM_SETFONT, (WPARAM)hFont, TRUE);
