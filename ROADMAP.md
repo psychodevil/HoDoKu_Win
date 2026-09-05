@@ -1,4 +1,4 @@
-# Overall Project Progress: 74% (83 completed / 112 total tasks)
+# Overall Project Progress: 64% (83 completed / 129 total tasks)
 
 Welcome to the central progress tracking roadmap for the **HoDoKu Native C++20 High-Performance Windows Edition**. This document serves as the single source of truth for architectural objectives, completed milestones, technical definitions of done, and queued engineering tasks.
 
@@ -397,3 +397,83 @@ High-level architectural objective: Enhance sharing, publishing, and puzzle exch
   - [ ] Implement compact QR code matrix generator for Sudoku strings and metadata.
   - [ ] Display interactive QR Code dialog allowing users to scan with phone cameras.
   - [ ] Support automatic puzzle extraction from clipboard images or screen captures.
+
+---
+
+## Goal 11: Embedded Scripting & Technique Plugin Architecture
+High-level architectural objective: Enable advanced users and researchers to develop, test, and register custom Sudoku solving techniques and elimination rules via embedded scripting and a C-ABI plugin interface.
+
+### Implementation Plan 11.1: C-ABI Technique Plugin Interface (`HoDoKuPluginAPI`)
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Define a stable C-ABI header interface (`hodoku_plugin.h`) for dynamically loaded shared libraries (`.dll`).
+  - Provide callbacks for inspecting `BoardState`, querying candidate masks, registering custom step names, scores, and candidate eliminations.
+  - **Definition of Done:** Third-party `.dll` plugins can be loaded at runtime from a `plugins/` directory and integrated into `StepFinder` and FAS.
+- **Granular Checklist:**
+  - [ ] Define stable C-ABI plugin header (`hodoku_plugin.h`) exposing board query and elimination APIs.
+  - [ ] Implement runtime dynamic library loader (`PluginManager`) scanning `plugins/*.dll` with signature validation.
+  - [ ] Integrate plugin-registered techniques into `StepFinder` priority escalation and FAS enumeration.
+
+### Implementation Plan 11.2: Embedded Lua Scripting Engine
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Embed lightweight Lua 5.4 runtime enabling rapid prototyping of novel Sudoku solving heuristics without C++ recompilation.
+  - Expose `BoardState`, `BitSet81`, and candidate elimination APIs to Lua scripts.
+  - **Definition of Done:** Execute `.lua` technique scripts from GUI or CLI and log deductions in Solution Path.
+- **Granular Checklist:**
+  - [ ] Embed Lua 5.4 zero-dependency core and bind `BoardState` and `BitSet81` metatables.
+  - [ ] Implement Lua technique handler registering custom callbacks into `StepFinder`.
+  - [ ] Add interactive Lua console / script runner dialog in GUI for live technique experimentation.
+
+---
+
+## Goal 12: WebAssembly (Wasm / Emscripten) Cross-Platform Web Target
+High-level architectural objective: Compile the pure C++20 core engine (`src/core/`) to high-speed WebAssembly, allowing web browsers to run HoDoKu's solver and generator client-side.
+
+### Implementation Plan 12.1: Emscripten Toolchain & Core Engine Wasm Bindings
+- **Planned Impact:** 2%
+- **Technical Approach & DoD:**
+  - Configure CMake/Emscripten build target (`emcc`) isolating `src/core/` (zero Win32 dependencies).
+  - Export JavaScript / TypeScript bindings via Embind (`dlx_solve`, `generate_puzzle`, `find_all_steps`, `rate_puzzle`).
+  - **Definition of Done:** Produce optimized `hodoku.wasm` and `hodoku.js` (< 250 KB) passing all unit tests in headless Node.js.
+- **Granular Checklist:**
+  - [ ] Create Emscripten CMake build configuration for pure C++20 core engine.
+  - [ ] Implement Embind interface exposing `BoardState`, `DlxSolver`, `StepFinder`, and `Generator`.
+  - [ ] Validate headless Wasm execution and benchmark parity against native x86_64 in Node.js test runner.
+
+### Implementation Plan 12.2: Web Canvas Demo & TypeScript Type Declarations
+- **Planned Impact:** 1%
+- **Technical Approach & DoD:**
+  - Author complete TypeScript type definitions (`hodoku.d.ts`) and modern ES module packaging.
+  - Provide a zero-dependency HTML5 Canvas web demo showcasing instant solving, step walkthroughs, and generator.
+  - **Definition of Done:** Web demo loads in Chrome/Firefox/Safari and solves/generates puzzles at 60 FPS purely on the client.
+- **Granular Checklist:**
+  - [ ] Generate comprehensive TypeScript declarations (`hodoku.d.ts`) for all exported core structures.
+  - [ ] Build minimal zero-dependency HTML5 Canvas web demo (`web/index.html`) demonstrating Wasm solving and generation.
+
+---
+
+## Goal 13: Daily Challenges, Archive Synchronization & Online Puzzle Packs
+High-level architectural objective: Provide automated daily puzzle seeding, curated puzzle pack downloading, and local progress tracking without requiring account registration.
+
+### Implementation Plan 13.1: Deterministic Daily Puzzle Generator & Calendar Archive
+- **Planned Impact:** 1%
+- **Technical Approach & DoD:**
+  - Implement deterministic PRNG seeding based on UTC date (`YYYY-MM-DD`) and difficulty level.
+  - Build Calendar Archive dialog in Win32 displaying past daily puzzles with completion checkmarks and solve timers.
+  - **Definition of Done:** Same daily puzzle is generated across all machines for any given date; solve times stored locally in `hodoku.ini`.
+- **Granular Checklist:**
+  - [ ] Implement deterministic daily puzzle seeding using SHA-256 / MurmurHash of calendar dates.
+  - [ ] Build interactive Daily Calendar dialog (`ShowDailyCalendarDialog`) with date navigation and solve records.
+  - [ ] Track completion streaks and personal best times in local persistent settings.
+
+### Implementation Plan 13.2: Online Puzzle Pack Downloader (WinHTTP)
+- **Planned Impact:** 1%
+- **Technical Approach & DoD:**
+  - Use native Windows HTTP Services (`WinHTTP` / `winhttp.dll`, zero third-party dependencies) to fetch curated public puzzle archives.
+  - Support downloading top-tier benchmark collections (e.g. AI Escargot, Arto Inkala extreme sets, Gordon Royle 17-clue collection).
+  - **Definition of Done:** Download and unpack curated collections directly into HoDoKu library with single click.
+- **Granular Checklist:**
+  - [ ] Implement native WinHTTP asynchronous client for downloading puzzle catalog manifests.
+  - [ ] Build Puzzle Pack Browser dialog allowing one-click download and import into studio library.
+  - [ ] Bundle classic benchmark datasets (17-clue collection, hardest historical puzzles) in local cache.
