@@ -14,6 +14,13 @@ struct AppSettings {
     int game_mode{0}; // 0 = Playing, 1 = Learning, 2 = Practicing
     bool colorku_mode{false};
     bool filter_excluded{false};
+    bool show_candidates{true};
+    bool show_deviations{true};
+    bool show_wrong_values{true};
+    bool color_values{true};
+    int default_png_size{1080};
+    int default_png_dpi{300};
+    int default_png_unit{2}; // 0 = mm, 1 = inch, 2 = pixel
 };
 
 class SettingsManager {
@@ -43,6 +50,13 @@ public:
         s.game_mode = GetPrivateProfileIntW(L"State", L"GameMode", 0, ini.c_str());
         s.colorku_mode = (GetPrivateProfileIntW(L"State", L"ColorKu", 0, ini.c_str()) != 0);
         s.filter_excluded = (GetPrivateProfileIntW(L"State", L"FilterExcluded", 0, ini.c_str()) != 0);
+        s.show_candidates = (GetPrivateProfileIntW(L"Preferences", L"ShowCandidates", 1, ini.c_str()) != 0);
+        s.show_deviations = (GetPrivateProfileIntW(L"Preferences", L"ShowDeviations", 1, ini.c_str()) != 0);
+        s.show_wrong_values = (GetPrivateProfileIntW(L"Preferences", L"ShowWrongValues", 1, ini.c_str()) != 0);
+        s.color_values = (GetPrivateProfileIntW(L"Preferences", L"ColorValues", 1, ini.c_str()) != 0);
+        s.default_png_size = GetPrivateProfileIntW(L"Export", L"PngSize", 1080, ini.c_str());
+        s.default_png_dpi = GetPrivateProfileIntW(L"Export", L"PngDpi", 300, ini.c_str());
+        s.default_png_unit = GetPrivateProfileIntW(L"Export", L"PngUnit", 2, ini.c_str());
 
         // Bounds validation
         if (s.window_w < 640) s.window_w = 1024;
@@ -63,6 +77,13 @@ public:
         WritePrivateProfileStringW(L"State", L"GameMode", std::to_wstring(s.game_mode).c_str(), ini.c_str());
         WritePrivateProfileStringW(L"State", L"ColorKu", s.colorku_mode ? L"1" : L"0", ini.c_str());
         WritePrivateProfileStringW(L"State", L"FilterExcluded", s.filter_excluded ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"Preferences", L"ShowCandidates", s.show_candidates ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"Preferences", L"ShowDeviations", s.show_deviations ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"Preferences", L"ShowWrongValues", s.show_wrong_values ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"Preferences", L"ColorValues", s.color_values ? L"1" : L"0", ini.c_str());
+        WritePrivateProfileStringW(L"Export", L"PngSize", std::to_wstring(s.default_png_size).c_str(), ini.c_str());
+        WritePrivateProfileStringW(L"Export", L"PngDpi", std::to_wstring(s.default_png_dpi).c_str(), ini.c_str());
+        WritePrivateProfileStringW(L"Export", L"PngUnit", std::to_wstring(s.default_png_unit).c_str(), ini.c_str());
     }
 };
 
